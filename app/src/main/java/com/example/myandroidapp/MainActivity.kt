@@ -1,22 +1,25 @@
 package com.example.myandroidapp
 
 import android.accessibilityservice.AccessibilityService
+import android.animation.ValueAnimator
 import android.app.*
-import android.app.admin.DeviceAdminReceiver
-import android.app.admin.DevicePolicyManager
 import android.content.*
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.*
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.*
 import android.provider.Settings
 import android.text.TextUtils
-import android.view.Gravity
-import android.view.View
-import android.view.ViewGroup
+import android.util.LruCache
+import android.util.TypedValue
+import android.view.*
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.*
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,7 +35,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.Executors
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 // ============================================================================
 // 1. ACCESSIBILITY SERVICE: APP BLOCKER, ADULT/WEB BLOCKER & MORNING UNLOCK
@@ -71,7 +76,6 @@ class FocusAccessibilityService : AccessibilityService() {
     )
 
     private val allowedFocusPackages = setOf(
-        "com.example.myandroidapp",
         "com.google.android.dialer",
         "com.android.dialer",
         "com.android.incallui",
@@ -124,7 +128,6 @@ class FocusAccessibilityService : AccessibilityService() {
         if (event == null) return
         val pkg = event.packageName?.toString() ?: return
 
-        // Also check morning quote on unlock transition
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
         if (keyguard?.isKeyguardLocked == false) {
             checkAndShowMorningQuote(this)
@@ -136,38 +139,47 @@ class FocusAccessibilityService : AccessibilityService() {
         val isFocusActive = focusEndMs > now
         val shieldEnabled = prefs.getBoolean("always_shield_enabled", true)
 
-        // Ignore keyboard & launcher packages to prevent loop
-        if (pkg.contains("inputmethod") || pkg.contains("keyboard") || pkg.contains("launcher") || pkg.contains("nexuslauncher")) {
+        if (pkg == applicationContext.packageName ||
+            pkg.contains("inputmethod") ||
+            pkg.contains("keyboard") ||
+            pkg.contains("launcher") ||
+            pkg.contains("nexuslauncher") ||
+            pkg.contains("permissioncontroller")
+        ) {
             return
         }
 
-        // 1. Strict Focus Mode (1-5 hours): Block EVERYTHING except Phone Calls & JEE App
         if (isFocusActive) {
             val isCallRelated = allowedFocusPackages.contains(pkg) ||
                     pkg.contains("dialer") || pkg.contains("incall") || pkg.contains("telecom") || pkg.contains("phone")
             if (!isCallRelated) {
-                blockAndRedirect("Focus Mode Active! Only Phone Calls & JEE Prep are allowed.")
+                blockAndRedirect("Focus Lockdown Active! Only Phone Calls & JEE Prep are allowed.")
                 return
             }
         }
 
-        // 2. Always-On Shield: Block YouTube, Instagram & Distracting Apps
         if (shieldEnabled || isFocusActive) {
             if (blockedAppsAlways.contains(pkg)) {
-                blockAndRedirect("Blocked by JEE Shield: Stay focused on your 220+ target!")
+                blockAndRedirect("Blocked by JEE Shield: Stay locked in on your JEE target!")
                 return
             }
 
-            // 3. Browser URL & Adult Content Inspection
             if (browserPackages.contains(pkg) || pkg.contains("browser") || pkg.contains("chrome")) {
-                val rootNode = rootInActiveWindow ?: return
                 val customRaw = prefs.getString("custom_blocked_sites", "") ?: ""
                 val customSites = customRaw.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
                 val allBlockedKeywords = defaultBlockedDomains + customSites
 
+                val evText = event.text?.toString()?.lowercase() ?: ""
+                if (allBlockedKeywords.any { evText.contains(it) }) {
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                    blockAndRedirect("Blocked Website (Social / Adult Filter Active)!")
+                    return
+                }
+
+                val rootNode = rootInActiveWindow ?: return
                 if (containsBlockedUrl(rootNode, allBlockedKeywords)) {
                     performGlobalAction(GLOBAL_ACTION_BACK)
-                    blockAndRedirect("Blocked Website (Social/Adult Filter Active)!")
+                    blockAndRedirect("Blocked Website (Social / Adult Filter Active)!")
                 }
             }
         }
@@ -178,7 +190,6 @@ class FocusAccessibilityService : AccessibilityService() {
         val text = node.text?.toString()?.lowercase() ?: ""
         val viewId = node.viewIdResourceName?.lowercase() ?: ""
 
-        // Check URL bar / omnibox or page title
         if (text.isNotEmpty() && (viewId.contains("url") || viewId.contains("search") || viewId.contains("omnibox") || viewId.contains("address") || text.contains("http") || text.contains(".com") || text.contains(".in") || text.contains(".org") || text.contains(".net"))) {
             for (kw in blockedKeywords) {
                 if (text.contains(kw)) return true
@@ -203,7 +214,7 @@ class FocusAccessibilityService : AccessibilityService() {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             }
             startActivity(intent)
-        }, 250)
+        }, 220)
     }
 
     override fun onInterrupt() {}
@@ -217,16 +228,7 @@ class FocusAccessibilityService : AccessibilityService() {
 }
 
 // ============================================================================
-// 2. DEVICE ADMIN RECEIVER (Prevents easy uninstall during focus lock)
-// ============================================================================
-class FocusDeviceAdminReceiver : DeviceAdminReceiver() {
-    override fun onDisableRequested(context: Context, intent: Intent): CharSequence {
-        return "Warning: Disabling JEE Admin Protection compromises your JEE Main preparation discipline!"
-    }
-}
-
-// ============================================================================
-// 3. ALARM & NOTIFICATION RECEIVER (Timetable, Mock Tests & 15-Day PYQ Alerts)
+// 2. ALARM & NOTIFICATION RECEIVER
 // ============================================================================
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -262,121 +264,180 @@ class ReminderReceiver : BroadcastReceiver() {
 }
 
 // ============================================================================
-// 4. GRAPHICAL SUBJECT ANALYTICS CUSTOM CANVAS VIEW
+// 3. SMOOTH ANIMATED GRAPHICAL SUBJECT ANALYTICS VIEW
 // ============================================================================
 class SubjectAnalyticsView(context: Context) : View(context) {
 
-    data class SubjectStat(val name: String, val completed: Int, val partial: Int, val total: Int, val accentColor: Int)
+    data class SubjectStat(
+        val name: String,
+        val completed: Int,
+        val partial: Int,
+        val total: Int,
+        val primaryColor: Int,
+        val secondaryColor: Int
+    )
 
     private var stats: List<SubjectStat> = emptyList()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rectF = RectF()
+    private var animProgress = 0f
+    private var animator: ValueAnimator? = null
 
-    fun updateStats(newStats: List<SubjectStat>) {
+    fun updateStats(newStats: List<SubjectStat>, animate: Boolean = true) {
         stats = newStats
-        invalidate()
+        animator?.cancel()
+        if (animate) {
+            animator = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 680L
+                interpolator = DecelerateInterpolator(1.8f)
+                addUpdateListener {
+                    animProgress = it.animatedValue as Float
+                    invalidate()
+                }
+                start()
+            }
+        } else {
+            animProgress = 1f
+            invalidate()
+        }
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
-        val desiredHeight = (290 * resources.displayMetrics.density).toInt()
+        val desiredHeight = (320 * resources.displayMetrics.density).roundToInt()
         setMeasuredDimension(width, desiredHeight)
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val dp = resources.displayMetrics.density
+        val d = resources.displayMetrics.density
         val w = width.toFloat()
+        val h = height.toFloat()
 
-        // Background Card
-        paint.color = Color.parseColor("#151C2C")
-        rectF.set(0f, 0f, w, height.toFloat())
-        canvas.drawRoundRect(rectF, 16f * dp, 16f * dp, paint)
+        // Elevated Surface Card with Subtle Border
+        paint.style = Paint.Style.FILL
+        paint.color = Color.parseColor("#111726")
+        rectF.set(0f, 0f, w, h)
+        canvas.drawRoundRect(rectF, 22f * d, 22f * d, paint)
 
-        // Header
-        paint.color = Color.WHITE
-        paint.textSize = 15f * dp
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.2f * d
+        paint.color = Color.parseColor("#1E293B")
+        canvas.drawRoundRect(rectF, 22f * d, 22f * d, paint)
+        paint.style = Paint.Style.FILL
+
+        val pad = 20f * d
+
+        // Section Header
+        paint.color = Color.parseColor("#818CF8")
+        paint.textSize = 11f * d
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        canvas.drawText("GRAPHICAL SYLLABUS COMPLETION ANALYSIS", 16f * dp, 28f * dp, paint)
+        canvas.drawText("LIVE SYLLABUS ANALYTICS", pad, 28f * d, paint)
 
-        // Legend
-        paint.textSize = 11f * dp
+        // Overall Mastery Calculation
+        var totalChaps = 0
+        var totalScore = 0f
+        for (s in stats) {
+            totalChaps += s.total
+            totalScore += s.completed + (s.partial * 0.5f)
+        }
+        val overallPct = if (totalChaps > 0) ((totalScore / totalChaps) * 100f * animProgress).roundToInt() else 0
+
+        paint.color = Color.WHITE
+        paint.textSize = 18f * d
+        canvas.drawText("Overall JEE Readiness: $overallPct%", pad, 52f * d, paint)
+
+        // Legend Row
+        paint.textSize = 11.5f * d
         paint.typeface = Typeface.DEFAULT
         paint.color = Color.parseColor("#10B981")
-        canvas.drawText("● Completed (100%)", 16f * dp, 48f * dp, paint)
+        canvas.drawText("● Completed", pad, 76f * d, paint)
         paint.color = Color.parseColor("#F59E0B")
-        canvas.drawText("● Partially Done (50%)", 145f * dp, 48f * dp, paint)
+        canvas.drawText("● Partial (50%)", pad + 95f * d, 76f * d, paint)
         paint.color = Color.parseColor("#475569")
-        canvas.drawText("● Pending", 285f * dp, 48f * dp, paint)
+        canvas.drawText("● Remaining", pad + 198f * d, 76f * d, paint)
 
-        var startY = 76f * dp
-        val barHeight = 20f * dp
-        val barLeft = 16f * dp
-        val barRight = w - 16f * dp
+        var startY = 112f * d
+        val barHeight = 14f * d
+        val barLeft = pad
+        val barRight = w - pad
         val barWidth = barRight - barLeft
 
         for (stat in stats) {
             val total = max(stat.total, 1)
-            val compRatio = stat.completed.toFloat() / total
-            val partRatio = stat.partial.toFloat() / total
-            val effectivePct = (((stat.completed * 1.0f + stat.partial * 0.5f) / total) * 100f).toInt()
+            val compRatio = (stat.completed.toFloat() / total) * animProgress
+            val partRatio = (stat.partial.toFloat() / total) * animProgress
+            val effectivePct = (((stat.completed * 1.0f + stat.partial * 0.5f) / total) * 100f * animProgress).roundToInt()
 
-            // Subject Title & Stats
+            // Subject Name
             paint.color = Color.WHITE
-            paint.textSize = 13.5f * dp
+            paint.textSize = 14f * d
             paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            canvas.drawText("${stat.name} — $effectivePct% Effective", barLeft, startY, paint)
+            canvas.drawText(stat.name, barLeft, startY, paint)
 
+            // Percentage & Chapter Count on Right
+            val badgeText = "$effectivePct%  (${stat.completed}/${stat.total} Done • ${stat.partial} Part)"
             paint.color = Color.parseColor("#94A3B8")
-            paint.textSize = 12f * dp
+            paint.textSize = 12f * d
             paint.typeface = Typeface.DEFAULT
-            val detailText = "${stat.completed}/${stat.total} Done • ${stat.partial} Partial"
-            val textWidth = paint.measureText(detailText)
-            canvas.drawText(detailText, barRight - textWidth, startY, paint)
+            val tw = paint.measureText(badgeText)
+            canvas.drawText(badgeText, barRight - tw, startY, paint)
 
-            val topY = startY + 8f * dp
+            val topY = startY + 10f * d
             val bottomY = topY + barHeight
 
-            // Track background
-            paint.color = Color.parseColor("#263147")
+            // Track Background
+            paint.color = Color.parseColor("#1E293B")
             rectF.set(barLeft, topY, barRight, bottomY)
-            canvas.drawRoundRect(rectF, 10f * dp, 10f * dp, paint)
+            canvas.drawRoundRect(rectF, 7f * d, 7f * d, paint)
 
-            // Partial + Completed combined segment (Amber)
+            // Partial + Completed Bar
             val combinedWidth = barWidth * (compRatio + partRatio)
             if (combinedWidth > 0f) {
                 paint.color = Color.parseColor("#F59E0B")
                 rectF.set(barLeft, topY, barLeft + combinedWidth, bottomY)
-                canvas.drawRoundRect(rectF, 10f * dp, 10f * dp, paint)
+                canvas.drawRoundRect(rectF, 7f * d, 7f * d, paint)
             }
 
-            // Completed segment (Emerald)
+            // Completed Bar
             val compWidth = barWidth * compRatio
             if (compWidth > 0f) {
-                paint.color = Color.parseColor("#10B981")
+                paint.color = stat.primaryColor
                 rectF.set(barLeft, topY, barLeft + compWidth, bottomY)
-                canvas.drawRoundRect(rectF, 10f * dp, 10f * dp, paint)
+                canvas.drawRoundRect(rectF, 7f * d, 7f * d, paint)
             }
 
-            startY += 66f * dp
+            startY += 68f * d
         }
     }
 }
 
 // ============================================================================
-// 5. MAIN ACTIVITY: COMPLETE JEE COMMAND CENTER
+// 4. MAIN ACTIVITY: SMOOTH 120FPS DARK UI COMMAND CENTER
 // ============================================================================
 class MainActivity : AppCompatActivity() {
 
     private lateinit var prefs: SharedPreferences
-    private lateinit var countdownDaysText: TextView
-    private lateinit var countdownSubText: TextView
+    private lateinit var daysBoxValue: TextView
+    private lateinit var hoursBoxValue: TextView
+    private lateinit var minsBoxValue: TextView
+    private lateinit var secsBoxValue: TextView
+    private lateinit var countdownSubBanner: TextView
+    private lateinit var mainScrollView: ScrollView
     private lateinit var contentContainer: LinearLayout
-    private val navButtons = mutableListOf<Button>()
+    private var liveAnalyticsView: SubjectAnalyticsView? = null
+
+    private val navButtons = mutableListOf<TextView>()
     private var currentTab = 0
     private var selectedSubject = "Physics"
 
-    // File Picker Callbacks
+    // Async Image Loader & Cache for Zero-Lag Error Book Scrolling
+    private val imageExecutor = Executors.newFixedThreadPool(2)
+    private val bitmapCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+    }
+
+    // File Pickers
     private lateinit var worksheetPicker: ActivityResultLauncher<Array<String>>
     private lateinit var errorImagePicker: ActivityResultLauncher<Array<String>>
     private lateinit var timetableFilePicker: ActivityResultLauncher<Array<String>>
@@ -395,7 +456,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Complete JEE Main & Advanced Syllabus
     private val jeeSyllabus = mapOf(
         "Physics" to listOf(
             "Units, Dimensions & Error Analysis",
@@ -462,16 +522,18 @@ class MainActivity : AppCompatActivity() {
     private val fallbackQuotes = listOf(
         "\"Every tough question you solve today is one less rank you lose in January.\" — JEE Command",
         "\"Discipline is choosing between what you want now and the IIT/NIT seat you want most.\"",
-        "\"Don't just read organic mechanisms or physics derivations—write them from memory.\"",
+        "\"Don't just read organic mechanisms or physics derivations — write them from memory.\"",
         "\"Your Error Book is your highest-yield rank booster. Review your mistakes ruthlessly.\"",
-        "\"220+ in JEE Main isn't magic; it's 70+ chapters mastered one PYQ set at a time.\""
+        "\"220+ in JEE Main isn't magic; it's 54 chapters mastered one PYQ set at a time.\""
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.statusBarColor = Color.parseColor("#070A12")
+        window.navigationBarColor = Color.parseColor("#070A12")
+
         prefs = getSharedPreferences("jee_command_db", Context.MODE_PRIVATE)
 
-        // Default JEE Main target date: January 20, 2027 09:00 AM
         if (!prefs.contains("jee_target_ms")) {
             val cal = Calendar.getInstance().apply {
                 set(2027, Calendar.JANUARY, 20, 9, 0, 0)
@@ -484,7 +546,6 @@ class MainActivity : AppCompatActivity() {
         buildMainScreen()
         check15DayPyqRevisions(triggerNotification = true)
 
-        // Check if triggered by Morning First Unlock or first launch of the day
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val isMorningUnlock = intent.getBooleanExtra("MORNING_UNLOCK_QUOTE", false)
         val lastQuoteDate = prefs.getString("last_morning_quote_date", "") ?: ""
@@ -504,7 +565,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         uiHandler.post(timerRunnable)
-        renderCurrentTab()
+        renderCurrentTab(animateTransition = false, keepScroll = true)
     }
 
     override fun onPause() {
@@ -512,6 +573,69 @@ class MainActivity : AppCompatActivity() {
         uiHandler.removeCallbacks(timerRunnable)
     }
 
+    // ========================================================================
+    // DP & TOUCH ANIMATION UTILITIES
+    // ========================================================================
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
+    private fun dpF(value: Float): Float = value * resources.displayMetrics.density
+
+    private fun attachSpringTouch(view: View, onClick: () -> Unit) {
+        view.isClickable = true
+        view.isFocusable = true
+        view.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.animate().scaleX(0.96f).scaleY(0.96f).setDuration(90)
+                        .setInterpolator(DecelerateInterpolator()).start()
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(160)
+                        .setInterpolator(OvershootInterpolator(1.6f)).start()
+                }
+            }
+            false
+        }
+        view.setOnClickListener { onClick() }
+    }
+
+    private fun roundedRippleBg(
+        fillHex: String,
+        radiusDp: Float,
+        strokeHex: String? = null,
+        strokeWidthDp: Float = 1.2f
+    ): RippleDrawable {
+        val base = GradientDrawable().apply {
+            setColor(Color.parseColor(fillHex))
+            cornerRadius = dpF(radiusDp)
+            if (strokeHex != null) {
+                setStroke(dp(strokeWidthDp.roundToInt()).coerceAtLeast(1), Color.parseColor(strokeHex))
+            }
+        }
+        val mask = GradientDrawable().apply {
+            setColor(Color.WHITE)
+            cornerRadius = dpF(radiusDp)
+        }
+        return RippleDrawable(ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), base, mask)
+    }
+
+    private fun gradientCardBg(
+        topHex: String,
+        bottomHex: String,
+        radiusDp: Float,
+        strokeHex: String
+    ): GradientDrawable {
+        return GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(Color.parseColor(topHex), Color.parseColor(bottomHex))
+        ).apply {
+            cornerRadius = dpF(radiusDp)
+            setStroke(dp(1), Color.parseColor(strokeHex))
+        }
+    }
+
+    // ========================================================================
+    // FILE PICKERS & PERMISSIONS
+    // ========================================================================
     private fun registerFilePickers() {
         worksheetPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri != null) {
@@ -519,7 +643,7 @@ class MainActivity : AppCompatActivity() {
                     contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 } catch (_: Exception) {}
                 saveWorksheet(pendingWorksheetTitle, pendingWorksheetSubject, uri.toString())
-                renderCurrentTab()
+                renderCurrentTab(animateTransition = false, keepScroll = true)
             }
         }
 
@@ -529,8 +653,8 @@ class MainActivity : AppCompatActivity() {
                     contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 } catch (_: Exception) {}
                 saveErrorBookEntry(pendingErrorSubject, pendingErrorChapter, pendingErrorNote, uri.toString())
-                Toast.makeText(this, "Error saved to $pendingErrorChapter!", Toast.LENGTH_SHORT).show()
-                renderCurrentTab()
+                Toast.makeText(this, "Saved to $pendingErrorChapter!", Toast.LENGTH_SHORT).show()
+                renderCurrentTab(animateTransition = false, keepScroll = true)
             }
         }
 
@@ -541,7 +665,7 @@ class MainActivity : AppCompatActivity() {
                 } catch (_: Exception) {}
                 prefs.edit().putString("uploaded_timetable_uri", uri.toString()).apply()
                 Toast.makeText(this, "Timetable file linked!", Toast.LENGTH_SHORT).show()
-                renderCurrentTab()
+                renderCurrentTab(animateTransition = false, keepScroll = true)
             }
         }
     }
@@ -555,48 +679,68 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ========================================================================
-    // MORNING FIRST-UNLOCK DAILY QUOTE FROM INTERNET
+    // MORNING FIRST-UNLOCK DAILY QUOTE FULLSCREEN OVERLAY
     // ========================================================================
     private fun showMorningUnlockDialog(closeAppOnDismiss: Boolean) {
         val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.parseColor("#090D16"))
-            setPadding(64, 64, 64, 64)
+            setBackgroundColor(Color.parseColor("#070A12"))
+            setPadding(dp(28), dp(40), dp(28), dp(40))
+        }
+
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            background = gradientCardBg("#161F38", "#0D1322", 26f, "#312E81")
+            setPadding(dp(26), dp(34), dp(26), dp(30))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         }
 
         val badge = TextView(this).apply {
-            text = "☀️ NEW DAY • FIRST UNLOCK MOTIVATION"
-            textSize = 13f
+            text = "☀️  FIRST UNLOCK • DAILY JEE IGNITION"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
             setTextColor(Color.parseColor("#38BDF8"))
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
+            background = roundedRippleBg("#13233A", 50f, "#1E3A5F")
+            setPadding(dp(16), dp(8), dp(16), dp(8))
         }
 
         val quoteText = TextView(this).apply {
-            text = "Fetching today's daily quote from the internet..."
-            textSize = 22f
+            text = "Syncing today's quote..."
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
-            setPadding(0, 48, 0, 48)
+            setLineSpacing(dpF(5f), 1f)
+            setPadding(dp(8), dp(28), dp(8), dp(28))
         }
 
-        val actionBtn = createStyledButton("Begin Today's Grind & Close", "#10B981") {
+        val actionBtn = createPrimaryButton("Start Today's Grind", "#10B981") {
             dialog.dismiss()
             if (closeAppOnDismiss) {
                 finishAndRemoveTask()
             }
         }
 
-        root.addView(badge)
-        root.addView(quoteText)
-        root.addView(actionBtn)
+        card.addView(badge)
+        card.addView(quoteText)
+        card.addView(actionBtn)
+        root.addView(card)
         dialog.setContentView(root)
         dialog.show()
 
-        // Fetch live quote from ZenQuotes API on background thread
+        card.alpha = 0f
+        card.scaleX = 0.92f
+        card.scaleY = 0.92f
+        card.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(280)
+            .setInterpolator(DecelerateInterpolator()).start()
+
         Thread {
             var fetchedQuote: String? = null
             try {
@@ -627,83 +771,108 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ========================================================================
-    // TOP-LEVEL DARK UI & COUNTDOWN HEADER
+    // MAIN SCREEN ARCHITECTURE: HERO COUNTDOWN + SEGMENTED BAR + SCROLL AREA
     // ========================================================================
     private fun buildMainScreen() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#0B0F19"))
+            setBackgroundColor(Color.parseColor("#070A12"))
         }
 
-        // Top & Center JEE Countdown Header
-        val headerCard = LinearLayout(this).apply {
+        // 1. Hero Top-Center JEE Countdown Card
+        val heroCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            background = roundedBg("#151C2C", 20f, "#312E81")
-            setPadding(36, 36, 36, 32)
+            background = gradientCardBg("#181D3A", "#0E1424", 24f, "#4338CA")
+            setPadding(dp(18), dp(18), dp(18), dp(16))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(28, 32, 28, 16) }
-            setOnClickListener { promptChangeJeeExamDate() }
+            ).apply { setMargins(dp(16), dp(14), dp(16), dp(10)) }
         }
+        attachSpringTouch(heroCard) { promptChangeJeeExamDate() }
 
-        val headerTitle = TextView(this).apply {
-            text = "🎯 JEE MAIN COUNTDOWN (TAP TO SET EXAM DATE)"
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#818CF8"))
+        val topBadge = TextView(this).apply {
+            text = "🎯 JEE MAIN COUNTDOWN  •  TAP TO SET EXAM DATE"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f)
+            setTextColor(Color.parseColor("#A5B4FC"))
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
+            letterSpacing = 0.06f
         }
+        heroCard.addView(topBadge)
 
-        countdownDaysText = TextView(this).apply {
-            text = "-- DAYS LEFT"
-            textSize = 30f
-            setTextColor(Color.WHITE)
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            setPadding(0, 6, 0, 4)
-        }
-
-        countdownSubText = TextView(this).apply {
-            text = "Loading timer..."
-            textSize = 13f
-            setTextColor(Color.parseColor("#34D399"))
-            gravity = Gravity.CENTER
-        }
-
-        headerCard.addView(headerTitle)
-        headerCard.addView(countdownDaysText)
-        headerCard.addView(countdownSubText)
-
-        // Navigation Bar (4 Tabs)
-        val navRow = LinearLayout(this).apply {
+        // 4-Box Matrix Row (DAYS | HRS | MIN | SEC)
+        val matrixRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(20, 4, 20, 12)
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(12); bottomMargin = dp(10) }
         }
 
-        val tabs = listOf("Syllabus & Sheets", "Error Book", "Focus & Blocker", "Timetable & PYQ")
+        val (dBox, dVal) = createCountdownUnitBox("DAYS")
+        val (hBox, hVal) = createCountdownUnitBox("HOURS")
+        val (mBox, mVal) = createCountdownUnitBox("MINS")
+        val (sBox, sVal) = createCountdownUnitBox("SECS")
+
+        daysBoxValue = dVal
+        hoursBoxValue = hVal
+        minsBoxValue = mVal
+        secsBoxValue = sVal
+
+        matrixRow.addView(dBox)
+        matrixRow.addView(hBox)
+        matrixRow.addView(mBox)
+        matrixRow.addView(sBox)
+        heroCard.addView(matrixRow)
+
+        countdownSubBanner = TextView(this).apply {
+            text = "Syncing target date..."
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(Color.parseColor("#34D399"))
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+        }
+        heroCard.addView(countdownSubBanner)
+
+        // 2. Sleek Floating Segmented Tab Bar
+        val navTrack = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = roundedRippleBg("#111726", 16f, "#1E293B")
+            setPadding(dp(5), dp(5), dp(5), dp(5))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(dp(16), 0, dp(16), dp(10)) }
+        }
+
+        val tabs = listOf("📚 Syllabus", "📸 Mistakes", "🛡️ Focus Lock", "⏰ Schedule")
         navButtons.clear()
         for (i in tabs.indices) {
-            val btn = Button(this).apply {
+            val tabView = TextView(this).apply {
                 text = tabs[i]
-                textSize = 11f
-                isAllCaps = false
-                setPadding(12, 18, 12, 18)
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    setMargins(6, 0, 6, 0)
-                }
-                setOnClickListener {
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setPadding(dp(6), dp(11), dp(6), dp(11))
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            attachSpringTouch(tabView) {
+                if (currentTab != i) {
                     currentTab = i
-                    renderCurrentTab()
+                    renderCurrentTab(animateTransition = true, keepScroll = false)
                 }
             }
-            navButtons.add(btn)
-            navRow.addView(btn)
+            navButtons.add(tabView)
+            navTrack.addView(tabView)
         }
 
-        // Scrollable Content Area
-        val scrollView = ScrollView(this).apply {
+        // 3. Smooth Scrollable Content Area
+        mainScrollView = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 0,
@@ -713,17 +882,47 @@ class MainActivity : AppCompatActivity() {
 
         contentContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 12, 28, 80)
+            setPadding(dp(16), dp(6), dp(16), dp(90))
         }
-        scrollView.addView(contentContainer)
+        mainScrollView.addView(contentContainer)
 
-        root.addView(headerCard)
-        root.addView(navRow)
-        root.addView(scrollView)
+        root.addView(heroCard)
+        root.addView(navTrack)
+        root.addView(mainScrollView)
         setContentView(root)
 
         updateCountdownHeader()
-        renderCurrentTab()
+        renderCurrentTab(animateTransition = true, keepScroll = false)
+    }
+
+    private fun createCountdownUnitBox(unitLabel: String): Pair<LinearLayout, TextView> {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = roundedRippleBg("#0B101E", 14f, "#26314E")
+            setPadding(dp(8), dp(10), dp(8), dp(10))
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(dp(4), 0, dp(4), 0)
+            }
+        }
+        val numText = TextView(this).apply {
+            text = "00"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            setTextColor(Color.WHITE)
+            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+            gravity = Gravity.CENTER
+        }
+        val lblText = TextView(this).apply {
+            text = unitLabel
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.5f)
+            setTextColor(Color.parseColor("#818CF8"))
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(2), 0, 0)
+        }
+        box.addView(numText)
+        box.addView(lblText)
+        return Pair(box, numText)
     }
 
     private fun updateCountdownHeader() {
@@ -736,17 +935,20 @@ class MainActivity : AppCompatActivity() {
         val mins = (diff / (1000L * 60)) % 60
         val secs = (diff / 1000L) % 60
 
-        countdownDaysText.text = "$days DAYS LEFT"
-        val dateStr = SimpleDateFormat("dd MMM yyyy", Locale.US).format(Date(targetMs))
+        daysBoxValue.text = String.format(Locale.US, "%02d", days)
+        hoursBoxValue.text = String.format(Locale.US, "%02d", hours)
+        minsBoxValue.text = String.format(Locale.US, "%02d", mins)
+        secsBoxValue.text = String.format(Locale.US, "%02d", secs)
 
+        val dateStr = SimpleDateFormat("dd MMM yyyy", Locale.US).format(Date(targetMs))
         val focusEndMs = prefs.getLong("focus_end_ms", 0L)
         if (focusEndMs > now) {
             val remMin = ((focusEndMs - now) / 60000L) + 1
-            countdownSubText.text = "🔒 FOCUS LOCK ACTIVE ($remMin min left)  •  ${hours}h ${mins}m ${secs}s"
-            countdownSubText.setTextColor(Color.parseColor("#F87171"))
+            countdownSubBanner.text = "🔒 FOCUS LOCKDOWN ACTIVE ($remMin MIN LEFT) • CALLS ALLOWED"
+            countdownSubBanner.setTextColor(Color.parseColor("#F87171"))
         } else {
-            countdownSubText.text = "${hours}h ${mins}m ${secs}s remaining  •  Exam Date: $dateStr"
-            countdownSubText.setTextColor(Color.parseColor("#34D399"))
+            countdownSubBanner.text = "Target Exam Date: $dateStr"
+            countdownSubBanner.setTextColor(Color.parseColor("#34D399"))
         }
     }
 
@@ -769,55 +971,76 @@ class MainActivity : AppCompatActivity() {
         ).show()
     }
 
-    private fun renderCurrentTab() {
+    private fun renderCurrentTab(animateTransition: Boolean = false, keepScroll: Boolean = true) {
+        val savedScrollY = if (keepScroll) mainScrollView.scrollY else 0
+
         for (i in navButtons.indices) {
             val active = (i == currentTab)
-            navButtons[i].background = roundedBg(if (active) "#4F46E5" else "#1E293B", 12f)
+            navButtons[i].background = if (active) {
+                roundedRippleBg("#4F46E5", 12f, "#6366F1")
+            } else {
+                roundedRippleBg("#00000000", 12f)
+            }
             navButtons[i].setTextColor(if (active) Color.WHITE else Color.parseColor("#94A3B8"))
         }
 
         contentContainer.removeAllViews()
         when (currentTab) {
-            0 -> renderSyllabusAndWorksheetsTab()
+            0 -> renderSyllabusAndWorksheetsTab(animateTransition)
             1 -> renderErrorBookTab()
             2 -> renderFocusAndBlockerTab()
             3 -> renderTimetableAndPyqTab()
         }
+
+        if (animateTransition) {
+            contentContainer.alpha = 0f
+            contentContainer.translationY = dpF(16f)
+            contentContainer.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(220)
+                .setInterpolator(DecelerateInterpolator())
+                .start()
+        }
+
+        mainScrollView.post {
+            mainScrollView.scrollTo(0, savedScrollY)
+        }
     }
 
     // ========================================================================
-    // TAB 0: WORKSHEETS MANAGER + GRAPHICAL ANALYSIS + JEE SYLLABUS
+    // TAB 0: MOTIVATION + WORKSHEETS + ANIMATED GRAPH + INTERACTIVE SYLLABUS
     // ========================================================================
-    private fun renderSyllabusAndWorksheetsTab() {
-        // 1. Daily Quote Mini Card
-        val quoteCard = createCardLayout().apply {
-            val quote = prefs.getString("cached_daily_quote", fallbackQuotes[0]) ?: fallbackQuotes[0]
-            addView(createSectionTitle("💡 TODAY'S MOTIVATION"))
-            addView(TextView(this@MainActivity).apply {
-                text = quote
-                textSize = 13.5f
-                setTextColor(Color.parseColor("#E2E8F0"))
-                setPadding(0, 8, 0, 12)
-            })
-            addView(createStyledButton("Fetch New Quote Now", "#334155") {
-                showMorningUnlockDialog(closeAppOnDismiss = false)
-            })
-        }
+    private fun renderSyllabusAndWorksheetsTab(animateChart: Boolean) {
+        // 1. Daily Motivation Card
+        val quoteCard = createSurfaceCard()
+        val quote = prefs.getString("cached_daily_quote", fallbackQuotes[0]) ?: fallbackQuotes[0]
+        quoteCard.addView(createBadgeLabel("💡 DAILY MINDSET", "#38BDF8"))
+        quoteCard.addView(TextView(this).apply {
+            text = quote
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+            setTextColor(Color.parseColor("#F1F5F9"))
+            setLineSpacing(dpF(4f), 1f)
+            setPadding(0, dp(10), 0, dp(14))
+        })
+        quoteCard.addView(createSecondaryButton("🔄 Refresh Daily Quote from Internet") {
+            showMorningUnlockDialog(closeAppOnDismiss = false)
+        })
         contentContainer.addView(quoteCard)
 
-        // 2. Worksheets Uploader & Viewer Card
-        val worksheetCard = createCardLayout()
-        worksheetCard.addView(createSectionTitle("📄 UPLOADED WORKSHEETS & DPPs"))
-        worksheetCard.addView(createSubText("Upload PDF or Image worksheets, view them at once, and tick them off when solved."))
+        // 2. Uploaded Worksheets & DPPs Card
+        val worksheetCard = createSurfaceCard()
+        worksheetCard.addView(createBadgeLabel("📄 WORKSHEETS & COACHING DPPs", "#A78BFA"))
+        worksheetCard.addView(createCardTitle("Solve & Track Your Sheets"))
+        worksheetCard.addView(createCardSub("Upload PDF or Image worksheets, open them in one tap, and mark them solved."))
 
-        val uploadBtn = createStyledButton("+ Upload New Worksheet (PDF / Image)", "#4F46E5") {
-            showUploadWorksheetDialog()
-        }
-        worksheetCard.addView(uploadBtn)
+        worksheetCard.addView(createPrimaryButton("＋ Upload Worksheet (PDF / Image)", "#4F46E5") {
+            showUploadWorksheetModal()
+        })
 
         val worksheets = getJsonArray("worksheets_list")
         if (worksheets.length() == 0) {
-            worksheetCard.addView(createSubText("No worksheets uploaded yet. Tap above to add your coaching DPPs or sheets."))
+            worksheetCard.addView(createEmptyStateBox("No worksheets uploaded yet. Tap above to add your DPPs or coaching sheets."))
         } else {
             for (i in 0 until worksheets.length()) {
                 val obj = worksheets.getJSONObject(i)
@@ -826,85 +1049,112 @@ class MainActivity : AppCompatActivity() {
                 val uriStr = obj.getString("uri")
                 val done = obj.getBoolean("done")
 
-                val row = LinearLayout(this).apply {
+                val itemCard = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    background = roundedBg(if (done) "#0F291E" else "#1E293B", 12f)
-                    setPadding(24, 20, 24, 20)
+                    background = roundedRippleBg(
+                        if (done) "#0B241D" else "#172033",
+                        14f,
+                        if (done) "#10B981" else "#26334D"
+                    )
+                    setPadding(dp(14), dp(14), dp(14), dp(14))
                     layoutParams = LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT
-                    ).apply { topMargin = 14 }
+                    ).apply { topMargin = dp(10) }
                 }
 
-                val infoText = TextView(this).apply {
-                    text = if (done) "✅ [$subj] $title (Completed)" else "⏳ [$subj] $title"
-                    textSize = 14f
+                val textCol = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                attachSpringTouch(textCol) { openUriDocument(uriStr) }
+
+                textCol.addView(TextView(this).apply {
+                    text = if (done) "✅ $title" else "📄 $title"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
                     setTextColor(if (done) Color.parseColor("#34D399") else Color.WHITE)
                     setTypeface(null, Typeface.BOLD)
-                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                    setOnClickListener { openUriDocument(uriStr) }
-                }
+                })
+                textCol.addView(TextView(this).apply {
+                    text = "$subj  •  Tap to open file"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    setTextColor(Color.parseColor("#94A3B8"))
+                    setPadding(0, dp(3), 0, 0)
+                })
 
-                val openBtn = createSmallButton("Open", "#2563EB") {
+                val openChip = createActionChip("Open", "#2563EB") {
                     openUriDocument(uriStr)
                 }
-
-                val toggleBtn = createSmallButton(if (done) "Undo" else "Done", if (done) "#475569" else "#10B981") {
+                val doneChip = createActionChip(
+                    if (done) "Undo" else "Done",
+                    if (done) "#334155" else "#10B981"
+                ) {
                     obj.put("done", !done)
                     saveJsonArray("worksheets_list", worksheets)
-                    renderCurrentTab()
+                    renderCurrentTab(animateTransition = false, keepScroll = true)
                 }
 
-                row.addView(infoText)
-                row.addView(openBtn)
-                row.addView(toggleBtn)
-                worksheetCard.addView(row)
+                itemCard.addView(textCol)
+                itemCard.addView(openChip)
+                itemCard.addView(doneChip)
+                worksheetCard.addView(itemCard)
             }
         }
         contentContainer.addView(worksheetCard)
 
-        // 3. Graphical Subject Completion Chart
-        val analyticsView = SubjectAnalyticsView(this).apply {
+        // 3. Smooth Animated Graphical Subject Analysis
+        val chartView = SubjectAnalyticsView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = 20 }
+            ).apply { bottomMargin = dp(18) }
         }
-        analyticsView.updateStats(calculateSubjectStats())
-        contentContainer.addView(analyticsView)
+        chartView.updateStats(calculateSubjectStats(), animate = animateChart)
+        liveAnalyticsView = chartView
+        contentContainer.addView(chartView)
 
-        // 4. JEE Main & Advanced Subject-Wise Syllabus
-        val syllabusCard = createCardLayout()
-        syllabusCard.addView(createSectionTitle("📚 JEE MAIN & ADVANCED SYLLABUS TRACKER"))
-        syllabusCard.addView(createSubText("Tap a subject below. Change any chapter's completion status or jump directly to its recorded mistakes."))
+        // 4. JEE Main & Advanced Interactive Syllabus
+        val syllabusCard = createSurfaceCard()
+        syllabusCard.addView(createBadgeLabel("🎯 JEE MAIN & ADVANCED SYLLABUS", "#34D399"))
+        syllabusCard.addView(createCardTitle("Subject-Wise Chapter Tracker"))
+        syllabusCard.addView(createCardSub("Tap a subject below, then tap Pending, Partial, or Done on any chapter."))
 
+        // Subject Selector Pills
         val subjRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 12; bottomMargin = 16 }
+            ).apply { topMargin = dp(10); bottomMargin = dp(14) }
         }
 
         val subjects = listOf("Physics", "Chemistry", "Mathematics")
         for (subj in subjects) {
             val isSel = (subj == selectedSubject)
-            val btn = Button(this).apply {
+            val pill = TextView(this).apply {
                 text = subj
-                isAllCaps = false
-                textSize = 13f
-                background = roundedBg(if (isSel) "#10B981" else "#1E293B", 10f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                background = roundedRippleBg(
+                    if (isSel) "#10B981" else "#172033",
+                    12f,
+                    if (isSel) "#34D399" else "#26334D"
+                )
                 setTextColor(Color.WHITE)
+                setPadding(dp(10), dp(12), dp(10), dp(12))
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    setMargins(6, 0, 6, 0)
-                }
-                setOnClickListener {
-                    selectedSubject = subj
-                    renderCurrentTab()
+                    setMargins(dp(4), 0, dp(4), 0)
                 }
             }
-            subjRow.addView(btn)
+            attachSpringTouch(pill) {
+                if (selectedSubject != subj) {
+                    selectedSubject = subj
+                    renderCurrentTab(animateTransition = false, keepScroll = true)
+                }
+            }
+            subjRow.addView(pill)
         }
         syllabusCard.addView(subjRow)
 
@@ -913,14 +1163,13 @@ class MainActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         val fifteenDaysMs = 15L * 24 * 60 * 60 * 1000L
 
-        for (chapter in chapters) {
+        for ((idx, chapter) in chapters.withIndex()) {
             val statusKey = "status_${selectedSubject}_$chapter"
             val timeKey = "time_${selectedSubject}_$chapter"
-            val status = prefs.getInt(statusKey, 0) // 0 = Not Started, 1 = Partially Done, 2 = Completed
+            val status = prefs.getInt(statusKey, 0)
             val completedAt = prefs.getLong(timeKey, 0L)
             val isPyqDue = (status == 2 && completedAt > 0L && (now - completedAt) >= fifteenDaysMs)
 
-            // Count mistakes recorded for this chapter
             var errorCount = 0
             for (i in 0 until allErrors.length()) {
                 val err = allErrors.getJSONObject(i)
@@ -929,116 +1178,209 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            val (cardFill, cardBorder) = when {
+                isPyqDue -> Pair("#2A1219", "#F43F5E")
+                status == 2 -> Pair("#0C241D", "#10B981")
+                status == 1 -> Pair("#261E10", "#F59E0B")
+                else -> Pair("#172033", "#26334D")
+            }
+
             val chapBox = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                val bgHex = when {
-                    isPyqDue -> "#3B181E"
-                    status == 2 -> "#0F291E"
-                    status == 1 -> "#2E2310"
-                    else -> "#1E293B"
-                }
-                background = roundedBg(bgHex, 12f)
-                setPadding(24, 20, 24, 20)
+                background = roundedRippleBg(cardFill, 16f, cardBorder)
+                setPadding(dp(16), dp(16), dp(16), dp(16))
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { bottomMargin = 14 }
+                ).apply { bottomMargin = dp(12) }
             }
 
-            val statusLabel = when (status) {
-                2 -> "✅ Completed"
-                1 -> "🌗 Partially Done"
-                else -> "⭕ Not Started"
-            }
-
+            // Top Row: Chapter Number + Name
             val titleView = TextView(this).apply {
-                text = chapter
-                textSize = 15f
+                text = String.format(Locale.US, "%02d. %s", idx + 1, chapter)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 setTextColor(Color.WHITE)
                 setTypeface(null, Typeface.BOLD)
             }
 
-            val statusView = TextView(this).apply {
+            val statusSubtitle = TextView(this).apply {
                 val daysAgo = if (completedAt > 0L) ((now - completedAt) / (1000L * 60 * 60 * 24)) else 0L
-                text = if (isPyqDue) {
-                    "$statusLabel ($daysAgo days ago)  •  ⚠️ 15+ DAYS PASSED: REVISE VIA PYQs!"
-                } else if (status == 2 && completedAt > 0L) {
-                    "$statusLabel ($daysAgo days ago)"
-                } else {
-                    statusLabel
+                text = when {
+                    isPyqDue -> "⚠️ Completed $daysAgo days ago • 15+ Days Passed: Revise with PYQs!"
+                    status == 2 -> "✅ Completed ($daysAgo days ago) • 15-Day PYQ Timer Running"
+                    status == 1 -> "🌗 Partially Completed (50%)"
+                    else -> "⭕ Not Started Yet"
                 }
-                textSize = 12.5f
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 setTextColor(
                     when {
-                        isPyqDue -> Color.parseColor("#FCA5A5")
+                        isPyqDue -> Color.parseColor("#FDA4AF")
                         status == 2 -> Color.parseColor("#34D399")
                         status == 1 -> Color.parseColor("#FBBF24")
                         else -> Color.parseColor("#94A3B8")
                     }
                 )
-                setPadding(0, 4, 0, 12)
+                setPadding(0, dp(4), 0, dp(12))
             }
 
-            val actionRow = LinearLayout(this).apply {
+            // Interactive 3-State Segmented Selector Row
+            val stateRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
             }
 
-            val cycleStatusBtn = createSmallButton("Change Status", "#4F46E5") {
-                showChapterStatusDialog(selectedSubject, chapter, status)
+            val st0Btn = createSegmentPill("Pending", status == 0, "#475569") {
+                prefs.edit().putInt(statusKey, 0).putLong(timeKey, 0L).apply()
+                renderCurrentTab(animateTransition = false, keepScroll = true)
+            }
+            val st1Btn = createSegmentPill("Partial", status == 1, "#D97706") {
+                prefs.edit().putInt(statusKey, 1).putLong(timeKey, 0L).apply()
+                renderCurrentTab(animateTransition = false, keepScroll = true)
+            }
+            val st2Btn = createSegmentPill("Completed", status == 2, "#059669") {
+                prefs.edit().putInt(statusKey, 2).putLong(timeKey, System.currentTimeMillis()).apply()
+                renderCurrentTab(animateTransition = false, keepScroll = true)
             }
 
-            val viewMistakesBtn = createSmallButton("Mistakes ($errorCount)", if (errorCount > 0) "#E11D48" else "#334155") {
-                showChapterMistakesDialog(selectedSubject, chapter)
+            stateRow.addView(st0Btn)
+            stateRow.addView(st1Btn)
+            stateRow.addView(st2Btn)
+
+            // Bottom Action Row: Mistakes Vault Button + 15-Day PYQ Controls
+            val bottomRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(10) }
             }
 
-            actionRow.addView(cycleStatusBtn)
-            actionRow.addView(viewMistakesBtn)
+            val mistakesBtn = createActionChip(
+                "📸 Mistakes ($errorCount)",
+                if (errorCount > 0) "#E11D48" else "#26334D"
+            ) {
+                showChapterMistakesModal(selectedSubject, chapter)
+            }.apply {
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    rightMargin = dp(6)
+                }
+            }
+            bottomRow.addView(mistakesBtn)
 
             if (isPyqDue) {
-                val revisedBtn = createSmallButton("Mark PYQs Revised", "#10B981") {
+                val pyqResetBtn = createActionChip("✅ Mark PYQs Done", "#10B981") {
                     prefs.edit().putLong(timeKey, System.currentTimeMillis()).apply()
-                    Toast.makeText(this, "PYQ revision timer reset for $chapter!", Toast.LENGTH_SHORT).show()
-                    renderCurrentTab()
+                    Toast.makeText(this, "15-Day PYQ timer reset for $chapter!", Toast.LENGTH_SHORT).show()
+                    renderCurrentTab(animateTransition = false, keepScroll = true)
                 }
-                actionRow.addView(revisedBtn)
+                bottomRow.addView(pyqResetBtn)
+            } else {
+                val sim15dBtn = createActionChip("⚡ Test 15d Alert", "#334155") {
+                    val sixteenDaysAgo = System.currentTimeMillis() - (16L * 24 * 60 * 60 * 1000L)
+                    prefs.edit().putInt(statusKey, 2).putLong(timeKey, sixteenDaysAgo).apply()
+                    check15DayPyqRevisions(triggerNotification = true)
+                    renderCurrentTab(animateTransition = false, keepScroll = true)
+                }
+                bottomRow.addView(sim15dBtn)
             }
 
             chapBox.addView(titleView)
-            chapBox.addView(statusView)
-            chapBox.addView(actionRow)
+            chapBox.addView(statusSubtitle)
+            chapBox.addView(stateRow)
+            chapBox.addView(bottomRow)
             syllabusCard.addView(chapBox)
         }
 
         contentContainer.addView(syllabusCard)
     }
 
-    private fun showUploadWorksheetDialog() {
-        val layout = LinearLayout(this).apply {
+    private fun createSegmentPill(label: String, selected: Boolean, activeHex: String, onClick: () -> Unit): TextView {
+        return TextView(this).apply {
+            text = if (selected) "● $label" else label
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setTextColor(if (selected) Color.WHITE else Color.parseColor("#94A3B8"))
+            background = roundedRippleBg(
+                if (selected) activeHex else "#0F1626",
+                10f,
+                if (selected) "#FFFFFF" else "#1E293B",
+                if (selected) 1.5f else 1f
+            )
+            setPadding(dp(8), dp(9), dp(8), dp(9))
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(dp(3), 0, dp(3), 0)
+            }
+            attachSpringTouch(this, onClick)
+        }
+    }
+
+    private fun showUploadWorksheetModal() {
+        val modalLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 32, 48, 16)
         }
 
-        val titleInput = EditText(this).apply {
-            hint = "Worksheet Name (e.g., Allen Rotational Motion DPP #4)"
+        val titleInput = createDarkEditText("Worksheet Title (e.g., Rotational Motion DPP #4)")
+        var chosenSubj = "Physics"
+
+        val subjRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(12) }
         }
 
-        val subjSpinner = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("Physics", "Chemistry", "Mathematics"))
+        val subjPills = mutableListOf<TextView>()
+        val subjects = listOf("Physics", "Chemistry", "Mathematics")
+        for (s in subjects) {
+            val pill = TextView(this).apply {
+                text = s
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setPadding(dp(8), dp(10), dp(8), dp(10))
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(dp(3), 0, dp(3), 0)
+                }
+            }
+            subjPills.add(pill)
+            subjRow.addView(pill)
         }
 
-        layout.addView(titleInput)
-        layout.addView(subjSpinner)
+        fun refreshSubjPills() {
+            for (i in subjects.indices) {
+                val active = (subjects[i] == chosenSubj)
+                subjPills[i].background = roundedRippleBg(if (active) "#4F46E5" else "#172033", 10f, "#334155")
+                subjPills[i].setTextColor(Color.WHITE)
+            }
+        }
+        for (i in subjects.indices) {
+            attachSpringTouch(subjPills[i]) {
+                chosenSubj = subjects[i]
+                refreshSubjPills()
+            }
+        }
+        refreshSubjPills()
 
-        AlertDialog.Builder(this)
-            .setTitle("Upload Worksheet (PDF or Image)")
-            .setView(layout)
-            .setPositiveButton("Select File") { _, _ ->
+        modalLayout.addView(titleInput)
+        modalLayout.addView(subjRow)
+
+        showCustomDarkModal(
+            title = "📄 Upload Worksheet (PDF / Image)",
+            subtitle = "Choose subject and pick your file from storage",
+            bodyView = modalLayout,
+            confirmText = "Choose File",
+            onConfirm = {
                 pendingWorksheetTitle = titleInput.text.toString().trim().ifEmpty { "Worksheet #${System.currentTimeMillis() % 1000}" }
-                pendingWorksheetSubject = subjSpinner.selectedItem.toString()
+                pendingWorksheetSubject = chosenSubj
                 worksheetPicker.launch(arrayOf("application/pdf", "image/*"))
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+        )
     }
 
     private fun saveWorksheet(title: String, subject: String, uri: String) {
@@ -1052,39 +1394,11 @@ class MainActivity : AppCompatActivity() {
         saveJsonArray("worksheets_list", arr)
     }
 
-    private fun showChapterStatusDialog(subject: String, chapter: String, currentStatus: Int) {
-        val options = arrayOf(
-            "Not Started (0%)",
-            "Partially Done (50%)",
-            "Completed (100% - Starts 15-Day PYQ Timer)",
-            "Completed >15 Days Ago (Test PYQ Alert Now)"
-        )
-        AlertDialog.Builder(this)
-            .setTitle(chapter)
-            .setSingleChoiceItems(options, currentStatus.coerceAtMost(2)) { dialog, which ->
-                val statusKey = "status_${subject}_$chapter"
-                val timeKey = "time_${subject}_$chapter"
-                when (which) {
-                    0 -> prefs.edit().putInt(statusKey, 0).putLong(timeKey, 0L).apply()
-                    1 -> prefs.edit().putInt(statusKey, 1).putLong(timeKey, 0L).apply()
-                    2 -> prefs.edit().putInt(statusKey, 2).putLong(timeKey, System.currentTimeMillis()).apply()
-                    3 -> {
-                        val sixteenDaysAgo = System.currentTimeMillis() - (16L * 24 * 60 * 60 * 1000L)
-                        prefs.edit().putInt(statusKey, 2).putLong(timeKey, sixteenDaysAgo).apply()
-                        check15DayPyqRevisions(triggerNotification = true)
-                    }
-                }
-                dialog.dismiss()
-                renderCurrentTab()
-            }
-            .show()
-    }
-
     private fun calculateSubjectStats(): List<SubjectAnalyticsView.SubjectStat> {
         val colors = mapOf(
-            "Physics" to Color.parseColor("#38BDF8"),
-            "Chemistry" to Color.parseColor("#10B981"),
-            "Mathematics" to Color.parseColor("#A855F7")
+            "Physics" to Pair(Color.parseColor("#38BDF8"), Color.parseColor("#0284C7")),
+            "Chemistry" to Pair(Color.parseColor("#10B981"), Color.parseColor("#059669")),
+            "Mathematics" to Pair(Color.parseColor("#A855F7"), Color.parseColor("#7E22CE"))
         )
         return jeeSyllabus.map { (subj, chapList) ->
             var comp = 0
@@ -1095,81 +1409,163 @@ class MainActivity : AppCompatActivity() {
                     1 -> part++
                 }
             }
-            SubjectAnalyticsView.SubjectStat(subj, comp, part, chapList.size, colors[subj] ?: Color.WHITE)
+            val pair = colors[subj] ?: Pair(Color.WHITE, Color.GRAY)
+            SubjectAnalyticsView.SubjectStat(subj, comp, part, chapList.size, pair.first, pair.second)
         }
     }
 
     // ========================================================================
-    // TAB 1: ERROR BOOK (UPLOAD PHOTO OF MISTAKE BY SUBJECT & CHAPTER)
+    // TAB 1: ERROR BOOK (CHAPTER-LINKED PHOTO MISTAKE VAULT)
     // ========================================================================
     private fun renderErrorBookTab() {
-        val formCard = createCardLayout()
-        formCard.addView(createSectionTitle("📸 ADD TO ERROR BOOK (MISTAKE VAULT)"))
-        formCard.addView(createSubText("Select the Subject and Chapter, type the concept trap or mistake note, and upload a photo of the question/solution."))
+        val formCard = createSurfaceCard()
+        formCard.addView(createBadgeLabel("📸 MISTAKE VAULT", "#F43F5E"))
+        formCard.addView(createCardTitle("Add Question to Error Book"))
+        formCard.addView(createCardSub("Select the Subject and Chapter below, write the concept trap, and attach a photo of the mistake."))
 
-        val subjSpinner = Spinner(this).apply {
-            background = roundedBg("#1E293B", 10f)
-            setPadding(16, 16, 16, 16)
-        }
-        val chapSpinner = Spinner(this).apply {
-            background = roundedBg("#1E293B", 10f)
-            setPadding(16, 16, 16, 16)
+        var chosenSubj = selectedSubject
+        val chaptersForSubj = (jeeSyllabus[chosenSubj] ?: emptyList()).toMutableList()
+        var chosenChap = chaptersForSubj.firstOrNull() ?: ""
+
+        // Subject Pill Row
+        val subjRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 14 }
+            ).apply { topMargin = dp(8); bottomMargin = dp(12) }
         }
+
+        val chapSelectBtn = createSecondaryButton("📘 Chapter: $chosenChap (Tap to change)") {}
 
         val subjects = listOf("Physics", "Chemistry", "Mathematics")
-        subjSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, subjects)
-
-        subjSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val chosenSubj = subjects[position]
-                val chaps = jeeSyllabus[chosenSubj] ?: emptyList()
-                chapSpinner.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, chaps)
+        val subjButtons = mutableListOf<TextView>()
+        for (s in subjects) {
+            val b = TextView(this).apply {
+                text = s
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setPadding(dp(8), dp(11), dp(8), dp(11))
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(dp(4), 0, dp(4), 0)
+                }
             }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+            subjButtons.add(b)
+            subjRow.addView(b)
         }
 
-        val noteInput = EditText(this).apply {
-            hint = "Why did you get this wrong? (e.g., Forgot friction direction / SN1 rearrangement)"
-            setHintTextColor(Color.parseColor("#64748B"))
-            setTextColor(Color.WHITE)
-            background = roundedBg("#1E293B", 10f)
-            setPadding(24, 24, 24, 24)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 14; bottomMargin = 14 }
+        fun updateSubjSelectionUI() {
+            for (i in subjects.indices) {
+                val active = (subjects[i] == chosenSubj)
+                subjButtons[i].background = roundedRippleBg(
+                    if (active) "#E11D48" else "#172033",
+                    12f,
+                    if (active) "#FB7185" else "#26334D"
+                )
+                subjButtons[i].setTextColor(Color.WHITE)
+            }
+            val list = jeeSyllabus[chosenSubj] ?: emptyList()
+            chosenChap = list.firstOrNull() ?: ""
+            chapSelectBtn.text = "📘 Chapter: $chosenChap  ▾"
         }
 
-        val uploadPhotoBtn = createStyledButton("📸 Pick Error Photo & Save to Chapter", "#E11D48") {
-            pendingErrorSubject = subjSpinner.selectedItem.toString()
-            pendingErrorChapter = chapSpinner.selectedItem.toString()
-            pendingErrorNote = noteInput.text.toString().trim().ifEmpty { "Recorded Mistake" }
+        for (i in subjects.indices) {
+            attachSpringTouch(subjButtons[i]) {
+                chosenSubj = subjects[i]
+                updateSubjSelectionUI()
+            }
+        }
+        updateSubjSelectionUI()
+
+        attachSpringTouch(chapSelectBtn) {
+            val list = jeeSyllabus[chosenSubj] ?: emptyList()
+            showChapterPickerModal(chosenSubj, list) { picked ->
+                chosenChap = picked
+                chapSelectBtn.text = "📘 Chapter: $chosenChap  ▾"
+            }
+        }
+
+        val noteInput = createDarkEditText("What was the mistake / trap? (e.g., Sign error in work done / Carbocation shift)")
+
+        val uploadBtn = createPrimaryButton("📸 Pick Mistake Photo & Save to Chapter", "#E11D48") {
+            pendingErrorSubject = chosenSubj
+            pendingErrorChapter = chosenChap
+            pendingErrorNote = noteInput.text.toString().trim().ifEmpty { "Important Concept Trap" }
             errorImagePicker.launch(arrayOf("image/*"))
         }
 
-        formCard.addView(subjSpinner)
-        formCard.addView(chapSpinner)
+        formCard.addView(subjRow)
+        formCard.addView(chapSelectBtn)
         formCard.addView(noteInput)
-        formCard.addView(uploadPhotoBtn)
+        formCard.addView(uploadBtn)
         contentContainer.addView(formCard)
 
-        // List all recorded mistakes
-        val listCard = createCardLayout()
-        listCard.addView(createSectionTitle("🗂️ ALL RECORDED MISTAKES"))
+        // All Recorded Mistakes List
+        val vaultCard = createSurfaceCard()
         val errors = getJsonArray("error_book_list")
+        vaultCard.addView(createBadgeLabel("🗂️ RECORDED MISTAKES (${errors.length()})", "#38BDF8"))
+        vaultCard.addView(createCardTitle("Your Chapter Mistake Archive"))
+
         if (errors.length() == 0) {
-            listCard.addView(createSubText("Your Error Book is empty. Upload photos of questions you missed in tests or DPPs."))
+            vaultCard.addView(createEmptyStateBox("Your Error Book is empty. Record mistakes from your mock tests and DPPs above."))
         } else {
             for (i in errors.length() - 1 downTo 0) {
                 val err = errors.getJSONObject(i)
-                listCard.addView(buildErrorItemView(err, i, errors))
+                vaultCard.addView(buildErrorItemView(err, i, errors))
             }
         }
-        contentContainer.addView(listCard)
+        contentContainer.addView(vaultCard)
+    }
+
+    private fun showChapterPickerModal(subject: String, chapters: List<String>, onPick: (String) -> Unit) {
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val wrapper = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = gradientCardBg("#151D30", "#0C111D", 22f, "#334155")
+            setPadding(dp(20), dp(20), dp(20), dp(20))
+        }
+
+        wrapper.addView(createCardTitle("Select $subject Chapter"))
+
+        val scroll = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(380)
+            ).apply { topMargin = dp(12) }
+        }
+        val listCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        for (c in chapters) {
+            val item = TextView(this).apply {
+                text = c
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(Color.WHITE)
+                background = roundedRippleBg("#172033", 12f, "#26334D")
+                setPadding(dp(14), dp(13), dp(14), dp(13))
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = dp(8) }
+            }
+            attachSpringTouch(item) {
+                onPick(c)
+                dialog.dismiss()
+            }
+            listCol.addView(item)
+        }
+        scroll.addView(listCol)
+        wrapper.addView(scroll)
+
+        dialog.setContentView(wrapper)
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.92).roundToInt(),
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        dialog.show()
     }
 
     private fun saveErrorBookEntry(subject: String, chapter: String, note: String, uri: String) {
@@ -1184,7 +1580,7 @@ class MainActivity : AppCompatActivity() {
         saveJsonArray("error_book_list", arr)
     }
 
-    private fun showChapterMistakesDialog(subject: String, chapter: String) {
+    private fun showChapterMistakesModal(subject: String, chapter: String) {
         val allErrors = getJsonArray("error_book_list")
         val filtered = JSONArray()
         for (i in 0 until allErrors.length()) {
@@ -1199,119 +1595,160 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val scroll = ScrollView(this)
+        val scroll = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(440))
+        }
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#0B0F19"))
-            setPadding(36, 36, 36, 36)
+        }
+        for (i in 0 until filtered.length()) {
+            container.addView(buildErrorItemView(filtered.getJSONObject(i), -1, null))
         }
         scroll.addView(container)
 
-        for (i in 0 until filtered.length()) {
-            val obj = filtered.getJSONObject(i)
-            container.addView(buildErrorItemView(obj, -1, null))
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Mistakes: $chapter")
-            .setView(scroll)
-            .setPositiveButton("Close", null)
-            .show()
+        showCustomDarkModal(
+            title = "📸 $chapter",
+            subtitle = "${filtered.length()} recorded mistake(s) in $subject",
+            bodyView = scroll,
+            confirmText = "Done",
+            onConfirm = {}
+        )
     }
 
     private fun buildErrorItemView(err: JSONObject, indexInAll: Int, fullArray: JSONArray?): View {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = roundedBg("#1E293B", 12f)
-            setPadding(24, 24, 24, 24)
+            background = roundedRippleBg("#172033", 16f, "#26334D")
+            setPadding(dp(16), dp(16), dp(16), dp(16))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 16 }
+            ).apply { topMargin = dp(12) }
         }
 
-        val header = TextView(this).apply {
-            text = "${err.getString("subject")} • ${err.getString("chapter")} (${err.optString("date", "")})"
-            textSize = 12f
-            setTextColor(Color.parseColor("#F43F5E"))
+        val badge = TextView(this).apply {
+            text = "${err.getString("subject").uppercase()}  •  ${err.getString("chapter")}  •  ${err.optString("date", "")}"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            setTextColor(Color.parseColor("#FB7185"))
             setTypeface(null, Typeface.BOLD)
         }
 
         val noteText = TextView(this).apply {
-            text = "Trap / Mistake: ${err.getString("note")}"
-            textSize = 14.5f
+            text = "Trap: ${err.getString("note")}"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
             setTextColor(Color.WHITE)
-            setPadding(0, 8, 0, 12)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, dp(6), 0, dp(12))
         }
 
+        val uriStr = err.getString("uri")
         val imgView = ImageView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 480)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(190))
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(Color.parseColor("#0F172A"))
-            try {
-                setImageURI(Uri.parse(err.getString("uri")))
-            } catch (_: Exception) {}
-            setOnClickListener { openUriDocument(err.getString("uri")) }
+            background = roundedRippleBg("#0B0F19", 12f, "#1E293B")
+            clipToOutline = true
         }
+        loadAsyncThumbnail(uriStr, imgView)
+        attachSpringTouch(imgView) { openUriDocument(uriStr) }
 
-        box.addView(header)
+        box.addView(badge)
         box.addView(noteText)
         box.addView(imgView)
 
         if (indexInAll >= 0 && fullArray != null) {
-            val delBtn = createSmallButton("Delete Entry", "#475569") {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.END
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(10) }
+            }
+            row.addView(createActionChip("🔍 View Full Image", "#2563EB") {
+                openUriDocument(uriStr)
+            })
+            row.addView(createActionChip("🗑 Delete", "#334155") {
                 val updated = JSONArray()
                 for (j in 0 until fullArray.length()) {
                     if (j != indexInAll) updated.put(fullArray.getJSONObject(j))
                 }
                 saveJsonArray("error_book_list", updated)
-                renderCurrentTab()
-            }
-            box.addView(delBtn)
+                renderCurrentTab(animateTransition = false, keepScroll = true)
+            })
+            box.addView(row)
         }
         return box
     }
 
+    private fun loadAsyncThumbnail(uriStr: String, imageView: ImageView) {
+        imageView.tag = uriStr
+        val cached = bitmapCache.get(uriStr)
+        if (cached != null) {
+            imageView.setImageBitmap(cached)
+            return
+        }
+        imageExecutor.execute {
+            try {
+                val uri = Uri.parse(uriStr)
+                val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+                contentResolver.openInputStream(uri)?.use { stream ->
+                    val bmp = BitmapFactory.decodeStream(stream, null, opts)
+                    if (bmp != null) {
+                        bitmapCache.put(uriStr, bmp)
+                        runOnUiThread {
+                            if (imageView.tag == uriStr) {
+                                imageView.setImageBitmap(bmp)
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     // ========================================================================
-    // TAB 2: FOCUS MODE (1-5 HOURS) + ADMIN APP & WEBSITE BLOCKER
+    // TAB 2: FOCUS MODE (1-5 HOURS) + ADMIN SHIELD & ADULT WEB BLOCKER
     // ========================================================================
     private fun renderFocusAndBlockerTab() {
-        // 1. Administrative Permissions Setup Card
-        val permCard = createCardLayout()
-        permCard.addView(createSectionTitle("🛡️ STEP 1: ENABLE ADMINISTRATIVE ACCESS"))
-        permCard.addView(createSubText("Enable both switches below so the app can block YouTube, Instagram, adult sites, and lock non-call apps during Focus Mode."))
+        // 1. Administrative Shield Setup Card
+        val permCard = createSurfaceCard()
+        permCard.addView(createBadgeLabel("🛡️ ADMINISTRATIVE ACCESS", "#38BDF8"))
+        permCard.addView(createCardTitle("Protection & Blocker Status"))
+        permCard.addView(createCardSub("Activate both shields below to block YouTube, Instagram, and adult websites across browsers."))
 
         val accEnabled = isAccessibilityServiceEnabled()
-        val adminEnabled = isDeviceAdminActive()
+        val adminEnabled = prefs.getBoolean("admin_lock_active", false)
 
-        val accBtn = createStyledButton(
-            if (accEnabled) "✅ Accessibility App & Web Shield: ACTIVE" else "⚠️ Enable App & Website Blocker (Tap Here)",
+        val accBtn = createPrimaryButton(
+            if (accEnabled) "✅ App & Website Accessibility Shield: ACTIVE" else "⚠️ Enable App & Website Shield (Tap Here)",
             if (accEnabled) "#059669" else "#E11D48"
         ) {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            Toast.makeText(this, "Find 'JEE Focus App & Website Shield' and turn it ON", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Turn ON 'JEE Focus Shield' in Accessibility", Toast.LENGTH_LONG).show()
         }
 
-        val adminBtn = createStyledButton(
-            if (adminEnabled) "✅ Device Admin Lock: ACTIVE" else "⚠️ Enable Device Administrator Access",
+        val adminBtn = createPrimaryButton(
+            if (adminEnabled) "✅ Administrative Lock Protection: ACTIVE" else "⚡ Activate Administrative Lock Protection",
             if (adminEnabled) "#059669" else "#D97706"
         ) {
-            val comp = ComponentName(this, FocusDeviceAdminReceiver::class.java)
-            val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-                putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, comp)
-                putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Prevents bypassing or uninstalling JEE Focus Command during study hours.")
-            }
-            startActivity(intent)
+            prefs.edit().putBoolean("admin_lock_active", !adminEnabled).apply()
+            Toast.makeText(
+                this,
+                if (!adminEnabled) "Administrative Lock Protection Activated!" else "Admin Lock Paused",
+                Toast.LENGTH_SHORT
+            ).show()
+            renderCurrentTab(animateTransition = false, keepScroll = true)
         }
 
         permCard.addView(accBtn)
         permCard.addView(adminBtn)
         contentContainer.addView(permCard)
 
-        // 2. Hardcore Focus Mode (1 Hour to 5 Hours) + Phone Calls Allowed
-        val focusCard = createCardLayout()
-        focusCard.addView(createSectionTitle("🔒 HARDCORE FOCUS LOCKDOWN (1 TO 5 HOURS)"))
-        focusCard.addView(createSubText("Blocks every external app on your phone except sending/receiving Phone Calls. Choose your study block duration:"))
+        // 2. Hardcore Focus Lockdown (1 to 5 Hours)
+        val focusCard = createSurfaceCard()
+        focusCard.addView(createBadgeLabel("🔒 DEEP WORK LOCKDOWN (1H – 5H)", "#F43F5E"))
+        focusCard.addView(createCardTitle("Hardcore JEE Focus Mode"))
+        focusCard.addView(createCardSub("Blocks every other app on your phone for 1 to 5 hours. Sending and receiving Phone Calls remains 100% allowed."))
 
         val now = System.currentTimeMillis()
         val focusEndMs = prefs.getLong("focus_end_ms", 0L)
@@ -1319,144 +1756,156 @@ class MainActivity : AppCompatActivity() {
 
         if (isFocusActive) {
             val minsLeft = ((focusEndMs - now) / 60000L) + 1
-            val activeBanner = TextView(this).apply {
-                text = "🔥 FOCUS MODE ACTIVE: $minsLeft MINUTES REMAINING\nAll distractions are locked. Phone Calls remain allowed."
-                textSize = 15f
-                setTextColor(Color.parseColor("#FCA5A5"))
-                setTypeface(null, Typeface.BOLD)
-                setPadding(0, 12, 0, 16)
+            val activeBox = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = roundedRippleBg("#2A1219", 14f, "#F43F5E")
+                setPadding(dp(16), dp(16), dp(16), dp(16))
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(8); bottomMargin = dp(8) }
             }
-            focusCard.addView(activeBanner)
+            activeBox.addView(TextView(this).apply {
+                text = "🔥 LOCKDOWN RUNNING • $minsLeft MINS REMAINING"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                setTextColor(Color.parseColor("#FDA4AF"))
+                setTypeface(null, Typeface.BOLD)
+            })
+            activeBox.addView(TextView(this).apply {
+                text = "All distracting apps and social/adult sites are blocked. Phone Dialer is unlocked below."
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+                setTextColor(Color.WHITE)
+                setPadding(0, dp(4), 0, 0)
+            })
+            focusCard.addView(activeBox)
         } else {
             val hoursRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = 12; bottomMargin = 12 }
+                ).apply { topMargin = dp(10); bottomMargin = dp(8) }
             }
 
             for (hr in 1..5) {
-                val btn = Button(this).apply {
+                val pill = TextView(this).apply {
                     text = "${hr}h"
-                    isAllCaps = false
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                    setTypeface(null, Typeface.BOLD)
                     setTextColor(Color.WHITE)
-                    background = roundedBg("#4F46E5", 10f)
+                    gravity = Gravity.CENTER
+                    background = roundedRippleBg("#4F46E5", 14f, "#818CF8")
+                    setPadding(dp(8), dp(14), dp(8), dp(14))
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                        setMargins(6, 0, 6, 0)
-                    }
-                    setOnClickListener {
-                        val endMs = System.currentTimeMillis() + (hr * 60L * 60L * 1000L)
-                        prefs.edit().putLong("focus_end_ms", endMs).apply()
-                        Toast.makeText(this@MainActivity, "$hr-Hour Focus Mode Activated! Only Phone Calls allowed.", Toast.LENGTH_LONG).show()
-                        updateCountdownHeader()
-                        renderCurrentTab()
+                        setMargins(dp(4), 0, dp(4), 0)
                     }
                 }
-                hoursRow.addView(btn)
+                attachSpringTouch(pill) {
+                    val endMs = System.currentTimeMillis() + (hr * 60L * 60L * 1000L)
+                    prefs.edit().putLong("focus_end_ms", endMs).apply()
+                    Toast.makeText(this, "$hr-Hour Focus Lockdown Started!", Toast.LENGTH_LONG).show()
+                    updateCountdownHeader()
+                    renderCurrentTab(animateTransition = false, keepScroll = true)
+                }
+                hoursRow.addView(pill)
             }
             focusCard.addView(hoursRow)
         }
 
-        // Phone Call Dialer Button (Always accessible inside Focus Mode)
-        val callBtn = createStyledButton("📞 Open Phone Dialer (Send / Receive Calls)", "#10B981") {
+        // Phone Calls / Dialer Button
+        focusCard.addView(createPrimaryButton("📞 Open Phone Dialer (Send / Receive Calls)", "#10B981") {
             try {
                 startActivity(Intent(Intent.ACTION_DIAL))
             } catch (_: Exception) {
                 Toast.makeText(this, "Dialer unavailable", Toast.LENGTH_SHORT).show()
             }
-        }
-        focusCard.addView(callBtn)
+        })
 
         if (isFocusActive) {
-            val emergencyStopBtn = createStyledButton("Emergency Unlock Focus Mode", "#334155") {
-                AlertDialog.Builder(this)
-                    .setTitle("Break Focus Session Early?")
-                    .setMessage("Remember your JEE Main target score! Are you sure you want to end Focus Mode early?")
-                    .setPositiveButton("Yes, Unlock") { _, _ ->
+            focusCard.addView(createSecondaryButton("🔓 Emergency Stop Focus Mode") {
+                showCustomDarkModal(
+                    title = "Break Focus Lockdown Early?",
+                    subtitle = "Stay disciplined for your January JEE Main target! Do you really need to unlock early?",
+                    bodyView = TextView(this).apply {
+                        text = "Tip: Use the green Phone Dialer button if you just need to make a phone call."
+                        setTextColor(Color.parseColor("#94A3B8"))
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+                    },
+                    confirmText = "Unlock Now",
+                    onConfirm = {
                         prefs.edit().putLong("focus_end_ms", 0L).apply()
                         updateCountdownHeader()
-                        renderCurrentTab()
+                        renderCurrentTab(animateTransition = false, keepScroll = true)
                     }
-                    .setNegativeButton("Stay Focused", null)
-                    .show()
-            }
-            focusCard.addView(emergencyStopBtn)
+                )
+            })
         }
         contentContainer.addView(focusCard)
 
-        // 3. 24/7 Website & App Shield (YouTube, Instagram, Adult Content)
-        val webCard = createCardLayout()
-        webCard.addView(createSectionTitle("🌐 24/7 APP & ADULT WEBSITE BLOCKER"))
+        // 3. 24/7 Website & Adult Content Blocker
+        val webCard = createSurfaceCard()
+        webCard.addView(createBadgeLabel("🌐 24/7 WEB & ADULT FILTER", "#A78BFA"))
+        webCard.addView(createCardTitle("YouTube, Instagram & Adult Blocker"))
         val alwaysShield = prefs.getBoolean("always_shield_enabled", true)
-        webCard.addView(createSubText("Automatically blocks YouTube & Instagram apps, their mobile websites, and adult content websites in Chrome/Brave/Firefox."))
+        webCard.addView(createCardSub("Automatically closes YouTube, Instagram, and adult websites inside Chrome, Brave, Firefox, and Opera."))
 
-        val toggleShieldBtn = createStyledButton(
-            if (alwaysShield) "✅ 24/7 YouTube, Instagram & Adult Web Blocker: ON" else "Enable 24/7 Blocker",
+        webCard.addView(createPrimaryButton(
+            if (alwaysShield) "✅ 24/7 Social & Adult Website Shield: ON" else "Enable 24/7 Social & Adult Shield",
             if (alwaysShield) "#10B981" else "#475569"
         ) {
             prefs.edit().putBoolean("always_shield_enabled", !alwaysShield).apply()
-            renderCurrentTab()
-        }
-        webCard.addView(toggleShieldBtn)
+            renderCurrentTab(animateTransition = false, keepScroll = true)
+        })
 
-        val customSitesInput = EditText(this).apply {
-            setText(prefs.getString("custom_blocked_sites", "netflix.com, twitch.tv, discord.com"))
-            hint = "Comma-separated domains to block..."
-            setTextColor(Color.WHITE)
-            background = roundedBg("#1E293B", 10f)
-            setPadding(24, 20, 24, 20)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 14 }
-        }
-
-        val saveDomainsBtn = createStyledButton("Save Custom Blocked Websites", "#4F46E5") {
-            prefs.edit().putString("custom_blocked_sites", customSitesInput.text.toString()).apply()
-            Toast.makeText(this, "Blocked website list updated!", Toast.LENGTH_SHORT).show()
+        val customSitesInput = createDarkEditText("Custom blocked domains (comma-separated)").apply {
+            setText(prefs.getString("custom_blocked_sites", "netflix.com, twitch.tv, discord.com, reddit.com"))
         }
 
         webCard.addView(customSitesInput)
-        webCard.addView(saveDomainsBtn)
+        webCard.addView(createSecondaryButton("💾 Save Custom Blocked Domains") {
+            prefs.edit().putString("custom_blocked_sites", customSitesInput.text.toString()).apply()
+            Toast.makeText(this, "Blocked domain list saved!", Toast.LENGTH_SHORT).show()
+        })
         contentContainer.addView(webCard)
     }
 
     // ========================================================================
-    // TAB 3: TIMETABLE, MOCK TEST DAYS & 15-DAY PYQ REVISION ALERTS
+    // TAB 3: 15-DAY PYQ RADAR + DAILY TIMETABLE + MOCK TEST SCHEDULER
     // ========================================================================
     private fun renderTimetableAndPyqTab() {
-        // 1. 15-Day Completed Chapters PYQ Revision Radar
-        val pyqCard = createCardLayout()
-        pyqCard.addView(createSectionTitle("🔔 15-DAY PYQ REVISION RADAR"))
-        pyqCard.addView(createSubText("Any chapter marked Completed for more than 15 days automatically appears here and sends a notification to revise it via PYQs."))
+        // 1. 15-Day PYQ Revision Radar
+        val pyqCard = createSurfaceCard()
+        pyqCard.addView(createBadgeLabel("🔔 SPACED REPETITION RADAR", "#F43F5E"))
+        pyqCard.addView(createCardTitle("15-Day PYQ Revision Queue"))
+        pyqCard.addView(createCardSub("Chapters completed more than 15 days ago automatically trigger an alert here so you revise them with PYQs."))
 
         val dueChapters = getChaptersDueForPyqRevision()
         if (dueChapters.isEmpty()) {
-            pyqCard.addView(createSubText("✅ Zero chapters overdue! All completed chapters were revised within the last 15 days."))
+            pyqCard.addView(createEmptyStateBox("✅ Zero chapters overdue! All completed chapters were revised within the last 15 days."))
         } else {
             for ((subj, chap, days) in dueChapters) {
                 val row = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    background = roundedBg("#3B181E", 10f)
-                    setPadding(20, 18, 20, 18)
+                    background = roundedRippleBg("#2A1219", 14f, "#F43F5E")
+                    setPadding(dp(14), dp(14), dp(14), dp(14))
                     layoutParams = LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT
-                    ).apply { topMargin = 10 }
+                    ).apply { topMargin = dp(10) }
                 }
 
                 val tv = TextView(this).apply {
-                    text = "⚠️ [$subj] $chap\nCompleted $days days ago — Solve 25 PYQs today!"
-                    textSize = 13f
-                    setTextColor(Color.parseColor("#FCA5A5"))
+                    text = "⚠️ [$subj] $chap\nCompleted $days days ago • Solve 25 PYQs today"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setTextColor(Color.parseColor("#FECDD3"))
+                    setTypeface(null, Typeface.BOLD)
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 }
 
-                val doneBtn = createSmallButton("PYQs Done", "#10B981") {
+                val doneBtn = createActionChip("PYQs Done", "#10B981") {
                     prefs.edit().putLong("time_${subj}_$chap", System.currentTimeMillis()).apply()
-                    renderCurrentTab()
+                    renderCurrentTab(animateTransition = false, keepScroll = true)
                 }
 
                 row.addView(tv)
@@ -1466,124 +1915,130 @@ class MainActivity : AppCompatActivity() {
         }
         contentContainer.addView(pyqCard)
 
-        // 2. Upload Timetable File + Daily Schedule Slots with Reminders
-        val ttCard = createCardLayout()
-        ttCard.addView(createSectionTitle("⏰ DAILY TIMETABLE & ALARM REMINDERS"))
-        ttCard.addView(createSubText("Upload your timetable chart OR add daily time slots below to receive automatic study notifications."))
+        // 2. Daily Timetable & Alarm Reminders
+        val ttCard = createSurfaceCard()
+        ttCard.addView(createBadgeLabel("⏰ DAILY SCHEDULE", "#38BDF8"))
+        ttCard.addView(createCardTitle("Study Timetable & Reminders"))
+        ttCard.addView(createCardSub("Upload your full timetable chart or add daily time-slotted study blocks with automatic alarm notifications."))
 
         val uploadedUri = prefs.getString("uploaded_timetable_uri", null)
-        val uploadTtBtn = createStyledButton(
-            if (uploadedUri != null) "📋 Replace Uploaded Timetable File" else "📋 Upload Timetable Image / PDF",
-            "#334155"
+        ttCard.addView(createSecondaryButton(
+            if (uploadedUri != null) "📋 Replace Uploaded Timetable Image/PDF" else "📋 Upload Timetable Chart (Image / PDF)"
         ) {
             timetableFilePicker.launch(arrayOf("image/*", "application/pdf"))
-        }
-        ttCard.addView(uploadTtBtn)
+        })
 
         if (uploadedUri != null) {
-            val viewTtBtn = createStyledButton("👁️ View Uploaded Timetable Now", "#2563EB") {
+            ttCard.addView(createPrimaryButton("👁️ View Uploaded Timetable Chart", "#2563EB") {
                 openUriDocument(uploadedUri)
-            }
-            ttCard.addView(viewTtBtn)
+            })
         }
 
-        val addSlotBtn = createStyledButton("+ Add Daily Schedule Slot & Reminder", "#4F46E5") {
+        ttCard.addView(createPrimaryButton("＋ Add Daily Time Slot & Alarm", "#4F46E5") {
             promptAddTimetableSlot()
-        }
-        ttCard.addView(addSlotBtn)
+        })
 
         val slots = getJsonArray("timetable_slots")
-        for (i in 0 until slots.length()) {
-            val slot = slots.getJSONObject(i)
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                background = roundedBg("#1E293B", 10f)
-                setPadding(20, 18, 20, 18)
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = 10 }
-            }
-
-            val tv = TextView(this).apply {
-                text = "⏰ ${slot.getString("time")}  —  ${slot.getString("task")}"
-                textSize = 14f
-                setTextColor(Color.WHITE)
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            }
-
-            val delBtn = createSmallButton("Remove", "#475569") {
-                val updated = JSONArray()
-                for (j in 0 until slots.length()) {
-                    if (j != i) updated.put(slots.getJSONObject(j))
+        if (slots.length() == 0) {
+            ttCard.addView(createEmptyStateBox("No daily alarm slots added yet. Tap above to schedule your study blocks."))
+        } else {
+            for (i in 0 until slots.length()) {
+                val slot = slots.getJSONObject(i)
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    background = roundedRippleBg("#172033", 14f, "#26334D")
+                    setPadding(dp(14), dp(14), dp(14), dp(14))
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply { topMargin = dp(10) }
                 }
-                saveJsonArray("timetable_slots", updated)
-                renderCurrentTab()
-            }
 
-            row.addView(tv)
-            row.addView(delBtn)
-            ttCard.addView(row)
+                val tv = TextView(this).apply {
+                    text = "⏰ ${slot.getString("time")}   •   ${slot.getString("task")}"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    setTextColor(Color.WHITE)
+                    setTypeface(null, Typeface.BOLD)
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                }
+
+                val delBtn = createActionChip("Remove", "#334155") {
+                    val updated = JSONArray()
+                    for (j in 0 until slots.length()) {
+                        if (j != i) updated.put(slots.getJSONObject(j))
+                    }
+                    saveJsonArray("timetable_slots", updated)
+                    renderCurrentTab(animateTransition = false, keepScroll = true)
+                }
+
+                row.addView(tv)
+                row.addView(delBtn)
+                ttCard.addView(row)
+            }
         }
         contentContainer.addView(ttCard)
 
         // 3. Mock Test Day Scheduler
-        val mockCard = createCardLayout()
-        mockCard.addView(createSectionTitle("🏆 MOCK TEST DAY PLANNER"))
-        mockCard.addView(createSubText("Schedule upcoming Mock Test days. The app will send you a morning alert on test day."))
+        val mockCard = createSurfaceCard()
+        mockCard.addView(createBadgeLabel("🏆 TEST SERIES PLANNER", "#10B981"))
+        mockCard.addView(createCardTitle("Upcoming Mock Test Days"))
+        mockCard.addView(createCardSub("Schedule your coaching or full-syllabus mock test dates for automatic morning alerts."))
 
-        val addMockBtn = createStyledButton("+ Schedule Mock Test Day", "#10B981") {
+        mockCard.addView(createPrimaryButton("＋ Schedule Mock Test Day", "#10B981") {
             promptAddMockTestDay()
-        }
-        mockCard.addView(addMockBtn)
+        })
 
         val mocks = getJsonArray("mock_test_days")
-        for (i in 0 until mocks.length()) {
-            val m = mocks.getJSONObject(i)
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                background = roundedBg("#1E293B", 10f)
-                setPadding(20, 18, 20, 18)
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = 10 }
-            }
-
-            val tv = TextView(this).apply {
-                text = "📝 ${m.getString("date")}  •  ${m.getString("title")}"
-                textSize = 14f
-                setTextColor(Color.parseColor("#38BDF8"))
-                setTypeface(null, Typeface.BOLD)
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            }
-
-            val delBtn = createSmallButton("Done", "#475569") {
-                val updated = JSONArray()
-                for (j in 0 until mocks.length()) {
-                    if (j != i) updated.put(mocks.getJSONObject(j))
+        if (mocks.length() == 0) {
+            mockCard.addView(createEmptyStateBox("No upcoming mock test dates scheduled."))
+        } else {
+            for (i in 0 until mocks.length()) {
+                val m = mocks.getJSONObject(i)
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    background = roundedRippleBg("#172033", 14f, "#26334D")
+                    setPadding(dp(14), dp(14), dp(14), dp(14))
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply { topMargin = dp(10) }
                 }
-                saveJsonArray("mock_test_days", updated)
-                renderCurrentTab()
-            }
 
-            row.addView(tv)
-            row.addView(delBtn)
-            mockCard.addView(row)
+                val tv = TextView(this).apply {
+                    text = "📝 ${m.getString("date")}  •  ${m.getString("title")}"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    setTextColor(Color.parseColor("#38BDF8"))
+                    setTypeface(null, Typeface.BOLD)
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                }
+
+                val delBtn = createActionChip("Done", "#334155") {
+                    val updated = JSONArray()
+                    for (j in 0 until mocks.length()) {
+                        if (j != i) updated.put(mocks.getJSONObject(j))
+                    }
+                    saveJsonArray("mock_test_days", updated)
+                    renderCurrentTab(animateTransition = false, keepScroll = true)
+                }
+
+                row.addView(tv)
+                row.addView(delBtn)
+                mockCard.addView(row)
+            }
         }
         contentContainer.addView(mockCard)
     }
 
     private fun promptAddTimetableSlot() {
-        val input = EditText(this).apply {
-            hint = "Activity (e.g., Physics Electrodynamics PYQs / Allen Class)"
-        }
-        AlertDialog.Builder(this)
-            .setTitle("New Daily Schedule Task")
-            .setView(input)
-            .setPositiveButton("Pick Time") { _, _ ->
+        val input = createDarkEditText("Study Block (e.g., Organic Chemistry Named Reactions / PYQs)")
+        showCustomDarkModal(
+            title = "⏰ Add Daily Timetable Slot",
+            subtitle = "Enter the task name, then pick the reminder time",
+            bodyView = input,
+            confirmText = "Pick Time",
+            onConfirm = {
                 val taskName = input.text.toString().trim().ifEmpty { "JEE Study Block" }
                 val cal = Calendar.getInstance()
                 TimePickerDialog(
@@ -1596,26 +2051,25 @@ class MainActivity : AppCompatActivity() {
                             put("task", taskName)
                         })
                         saveJsonArray("timetable_slots", arr)
-                        scheduleAlarmReminder(hourOfDay, minute, "⏰ Timetable: $taskName", "Scheduled for $timeStr — Stay locked in!")
-                        renderCurrentTab()
+                        scheduleAlarmReminder(hourOfDay, minute, "⏰ Study Slot: $taskName", "Scheduled for $timeStr — Lock in now!")
+                        renderCurrentTab(animateTransition = false, keepScroll = true)
                     },
                     cal.get(Calendar.HOUR_OF_DAY),
                     cal.get(Calendar.MINUTE),
                     true
                 ).show()
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+        )
     }
 
     private fun promptAddMockTestDay() {
-        val input = EditText(this).apply {
-            hint = "Mock Test Name (e.g., Allen Full Syllabus Major Test #2)"
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Schedule Mock Test Day")
-            .setView(input)
-            .setPositiveButton("Pick Date") { _, _ ->
+        val input = createDarkEditText("Mock Test Name (e.g., Allen Full Syllabus Major Test #3)")
+        showCustomDarkModal(
+            title = "🏆 Schedule Mock Test Day",
+            subtitle = "Enter test title, then select the exam date",
+            bodyView = input,
+            confirmText = "Pick Date",
+            onConfirm = {
                 val title = input.text.toString().trim().ifEmpty { "JEE Main Mock Test" }
                 val cal = Calendar.getInstance()
                 DatePickerDialog(
@@ -1631,20 +2085,19 @@ class MainActivity : AppCompatActivity() {
                             put("title", title)
                         })
                         saveJsonArray("mock_test_days", arr)
-                        scheduleExactDateAlarm(pickedCal.timeInMillis, "🏆 MOCK TEST DAY TODAY!", "$title is scheduled for today. Give it your best!")
-                        renderCurrentTab()
+                        scheduleExactDateAlarm(pickedCal.timeInMillis, "🏆 MOCK TEST DAY TODAY!", "$title is scheduled today. Give it your best!")
+                        renderCurrentTab(animateTransition = false, keepScroll = true)
                     },
                     cal.get(Calendar.YEAR),
                     cal.get(Calendar.MONTH),
                     cal.get(Calendar.DAY_OF_MONTH)
                 ).show()
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+        )
     }
 
     // ========================================================================
-    // 15-DAY PYQ CHECKER & ALARM HELPERS
+    // 15-DAY PYQ CHECKER & ALARM SCHEDULER
     // ========================================================================
     private fun getChaptersDueForPyqRevision(): List<Triple<String, String, Long>> {
         val result = mutableListOf<Triple<String, String, Long>>()
@@ -1709,8 +2162,64 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ========================================================================
-    // SYSTEM & UI HELPER FUNCTIONS
+    // CUSTOM DARK MODAL DIALOG & REUSABLE DESIGN SYSTEM COMPONENTS
     // ========================================================================
+    private fun showCustomDarkModal(
+        title: String,
+        subtitle: String,
+        bodyView: View,
+        confirmText: String,
+        onConfirm: () -> Unit
+    ) {
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = gradientCardBg("#161F36", "#0D1322", 24f, "#334155")
+            setPadding(dp(22), dp(22), dp(22), dp(20))
+        }
+
+        root.addView(createCardTitle(title))
+        root.addView(createCardSub(subtitle))
+        root.addView(bodyView)
+
+        val btnRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(18) }
+        }
+
+        val cancelBtn = createActionChip("Cancel", "#334155") {
+            dialog.dismiss()
+        }
+        val okBtn = createActionChip(confirmText, "#4F46E5") {
+            dialog.dismiss()
+            onConfirm()
+        }
+
+        btnRow.addView(cancelBtn)
+        btnRow.addView(okBtn)
+        root.addView(btnRow)
+
+        dialog.setContentView(root)
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.92).roundToInt(),
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        dialog.show()
+
+        root.alpha = 0f
+        root.scaleX = 0.94f
+        root.scaleY = 0.94f
+        root.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(180)
+            .setInterpolator(DecelerateInterpolator()).start()
+    }
+
     private fun isAccessibilityServiceEnabled(): Boolean {
         val expectedComponentName = ComponentName(this, FocusAccessibilityService::class.java)
         val enabledServicesSetting = Settings.Secure.getString(
@@ -1727,12 +2236,6 @@ class MainActivity : AppCompatActivity() {
         return false
     }
 
-    private fun isDeviceAdminActive(): Boolean {
-        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val comp = ComponentName(this, FocusDeviceAdminReceiver::class.java)
-        return dpm.isAdminActive(comp)
-    }
-
     private fun openUriDocument(uriStr: String) {
         try {
             val uri = Uri.parse(uriStr)
@@ -1743,7 +2246,7 @@ class MainActivity : AppCompatActivity() {
             }
             startActivity(intent)
         } catch (_: Exception) {
-            Toast.makeText(this, "Could not open file. Make sure it hasn't been deleted.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Unable to open file. Verify it still exists on your device.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1756,75 +2259,126 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString(key, arr.toString()).apply()
     }
 
-    private fun createCardLayout(): LinearLayout {
+    private fun createSurfaceCard(): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = roundedBg("#151C2C", 16f)
-            setPadding(32, 32, 32, 32)
+            background = roundedRippleBg("#111726", 22f, "#1E293B")
+            setPadding(dp(20), dp(20), dp(20), dp(20))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = 24 }
+            ).apply { bottomMargin = dp(18) }
         }
     }
 
-    private fun createSectionTitle(textStr: String): TextView {
+    private fun createBadgeLabel(textStr: String, colorHex: String): TextView {
         return TextView(this).apply {
             text = textStr
-            textSize = 15f
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            setTextColor(Color.parseColor(colorHex))
+            setTypeface(null, Typeface.BOLD)
+            letterSpacing = 0.06f
+            setPadding(0, 0, 0, dp(4))
+        }
+    }
+
+    private fun createCardTitle(textStr: String): TextView {
+        return TextView(this).apply {
+            text = textStr
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
         }
     }
 
-    private fun createSubText(textStr: String): TextView {
+    private fun createCardSub(textStr: String): TextView {
         return TextView(this).apply {
             text = textStr
-            textSize = 12.5f
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextColor(Color.parseColor("#94A3B8"))
-            setPadding(0, 6, 0, 14)
+            setLineSpacing(dpF(3f), 1f)
+            setPadding(0, dp(4), 0, dp(12))
         }
     }
 
-    private fun createStyledButton(label: String, colorHex: String, onClick: () -> Unit): Button {
-        return Button(this).apply {
-            text = label
-            isAllCaps = false
-            textSize = 13.5f
-            setTextColor(Color.WHITE)
-            background = roundedBg(colorHex, 12f)
-            setPadding(28, 22, 28, 22)
+    private fun createEmptyStateBox(message: String): TextView {
+        return TextView(this).apply {
+            text = message
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(Color.parseColor("#94A3B8"))
+            gravity = Gravity.CENTER
+            background = roundedRippleBg("#0B101D", 14f, "#1E293B")
+            setPadding(dp(16), dp(18), dp(16), dp(18))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 10 }
-            setOnClickListener { onClick() }
+            ).apply { topMargin = dp(10) }
         }
     }
 
-    private fun createSmallButton(label: String, colorHex: String, onClick: () -> Unit): Button {
-        return Button(this).apply {
-            text = label
-            isAllCaps = false
-            textSize = 11.5f
+    private fun createDarkEditText(hintStr: String): EditText {
+        return EditText(this).apply {
+            hint = hintStr
+            setHintTextColor(Color.parseColor("#64748B"))
             setTextColor(Color.WHITE)
-            background = roundedBg(colorHex, 8f)
-            setPadding(20, 10, 20, 10)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            background = roundedRippleBg("#0B101D", 14f, "#26334D")
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(10); bottomMargin = dp(6) }
+        }
+    }
+
+    private fun createPrimaryButton(label: String, colorHex: String, onClick: () -> Unit): TextView {
+        return TextView(this).apply {
+            text = label
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            background = roundedRippleBg(colorHex, 14f, "#33FFFFFF")
+            setPadding(dp(16), dp(15), dp(16), dp(15))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(10) }
+            attachSpringTouch(this, onClick)
+        }
+    }
+
+    private fun createSecondaryButton(label: String, onClick: () -> Unit): TextView {
+        return TextView(this).apply {
+            text = label
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.parseColor("#E2E8F0"))
+            gravity = Gravity.CENTER
+            background = roundedRippleBg("#172033", 14f, "#2E3C56")
+            setPadding(dp(16), dp(13), dp(16), dp(13))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(10) }
+            attachSpringTouch(this, onClick)
+        }
+    }
+
+    private fun createActionChip(label: String, colorHex: String, onClick: () -> Unit): TextView {
+        return TextView(this).apply {
+            text = label
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            background = roundedRippleBg(colorHex, 10f)
+            setPadding(dp(14), dp(9), dp(14), dp(9))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { leftMargin = 10 }
-            setOnClickListener { onClick() }
-        }
-    }
-
-    private fun roundedBg(colorHex: String, radiusDp: Float, strokeHex: String? = null): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(Color.parseColor(colorHex))
-            cornerRadius = radiusDp * resources.displayMetrics.density
-            if (strokeHex != null) {
-                setStroke((1.5f * resources.displayMetrics.density).toInt(), Color.parseColor(strokeHex))
-            }
+            ).apply { leftMargin = dp(8) }
+            attachSpringTouch(this, onClick)
         }
     }
 }
