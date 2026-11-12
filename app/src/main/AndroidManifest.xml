@@ -9,11 +9,11 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
         android:label="JEE Focus Command"
         android:theme="@style/Theme.Material3.DayNight.NoActionBar">
-        
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -27,7 +27,7 @@
         <service
             android:name=".FocusAccessibilityService"
             android:exported="true"
-            android:label="JEE Focus App &amp; Website Shield"
+            android:label="JEE Focus App & Website Shield"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -55,7 +55,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name=" android.intent.action.USER_PRESENT" />
+                <action android:name="android.intent.action.USER_PRESENT" />
             </intent-filter>
         </receiver>
 
