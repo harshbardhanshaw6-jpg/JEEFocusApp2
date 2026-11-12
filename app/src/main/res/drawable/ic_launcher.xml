@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Dark Navy Background -->
+    <path
+        android:fillColor="#0B0F19"
+        android:pathData="M0,0h108v108h-108z" />
+
+    <!-- Outer Hexagonal Focus Shield -->
+    <path
+        android:fillColor="#151C2C"
+        android:strokeColor="#4F46E5"
+        android:strokeWidth="3.5"
+        android:pathData="M54,14 L88,30 L88,62 C88,80 54,94 54,94 C54,94 20,80 20,62 L20,30 Z" />
+
+    <!-- Inner Shield Accent -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#10B981"
+        android:strokeWidth="2"
+        android:pathData="M54,22 L80,35 L80,60 C80,74 54,86 54,86 C54,86 28,74 28,60 L28,35 Z" />
+
+    <!-- Target Crosshair Outer Ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="3"
+        android:pathData="M54,36 A18,18 0 1,1 53.9,36 Z" />
+
+    <!-- Target Crosshair Lines -->
+    <path
+        android:strokeColor="#10B981"
+        android:strokeWidth="3"
+        android:pathData="M54,26 L54,42 M54,66 L54,82 M26,54 L42,54 M66,54 L82,54" />
+
+    <!-- Center Bullseye Core -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M54,48 A6,6 0 1,1 53.9,48 Z" />
+</vector>
