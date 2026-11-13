@@ -29,7 +29,7 @@ jobs:
           mkdir -p app/src/main/res/drawable-nodpi
           mkdir -p app/src/main/res/xml
 
-          cp Gemini_Generated_Image*.jpg app/src/main/res/drawable-nodpi/hero_stargazer.jpg 2>/dev/null || cp *.jpg app/src/main/res/drawable-nodpi/hero_stargazer.jpg 2>/dev/null || cp *.jpeg app/src/main/res/drawable-nodpi/hero_stargazer.jpg || true
+          cp default.jpg app/src/main/res/drawable-nodpi/hero_stargazer.jpg 2>/dev/null || cp *.jpg app/src/main/res/drawable-nodpi/hero_stargazer.jpg 2>/dev/null || true
 
           cat << 'EOF' > gradle.properties
           mkdir -p app/src/main/res/drawable
