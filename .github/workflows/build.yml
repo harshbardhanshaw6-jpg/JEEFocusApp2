@@ -21,16 +21,2141 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Configure Gradle & Manifest
+      - name: Generate JEE Ascend Pro UI & Project Files
         run: |
-          rm -rf app/src/main/res/mipmap* app/src/main/res/drawable* app/src/main/res/xml/device_admin_config.xml
-          mkdir -p app/src/main/res/drawable app/src/main/res/xml
-          printf '%s\n' 'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' 'android.useAndroidX=true' 'android.nonTransitiveRClass=true' > gradle.properties
-          printf '%s\n' 'plugins {' 'id "com.android.application" version "8.5.2" apply false' 'id "org.jetbrains.kotlin.android" version "1.9.24" apply false' '}' > build.gradle
-          printf '%s\n' 'plugins {' 'id "com.android.application"' 'id "org.jetbrains.kotlin.android"' '}' 'android {' 'namespace "com.example.myandroidapp"' 'compileSdk 34' 'defaultConfig {' 'applicationId "com.harsh.jeeprep.tracker"' 'minSdk 24' 'targetSdk 34' 'versionCode 6' 'versionName "2.0"' '}' 'compileOptions {' 'sourceCompatibility JavaVersion.VERSION_17' 'targetCompatibility JavaVersion.VERSION_17' '}' 'kotlinOptions {' 'jvmTarget = "17"' '}' '}' 'dependencies {' 'implementation "androidx.core:core-ktx:1.12.0"' 'implementation "androidx.appcompat:appcompat:1.6.1"' 'implementation "com.google.android.material:material:1.11.0"' '}' > app/build.gradle
-          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">' '<path android:fillColor="#0B0F19" android:pathData="M0,0h108v108h-108z"/>' '<path android:fillColor="#151C2C" android:strokeColor="#4F46E5" android:strokeWidth="4" android:pathData="M54,14 L88,30 L88,62 C88,80 54,94 54,94 C54,94 20,80 20,62 L20,30 Z"/>' '<path android:fillColor="#00000000" android:strokeColor="#38BDF8" android:strokeWidth="3" android:pathData="M54,36 A18,18 0 1,1 53.9,36 Z"/>' '<path android:fillColor="#10B981" android:pathData="M54,48 A6,6 0 1,1 53.9,48 Z"/>' '</vector>' > app/src/main/res/drawable/ic_launcher.xml
-          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android" android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged" android:accessibilityFeedbackType="feedbackGeneric" android:accessibilityFlags="flagReportViewIds|flagIncludeNotImportantViews" android:canRetrieveWindowContent="true" android:notificationTimeout="100"/>' > app/src/main/res/xml/accessibility_service_config.xml
-          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<manifest xmlns:android="http://schemas.android.com/apk/res/android">' '<uses-permission android:name="android.permission.INTERNET"/>' '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>' '<uses-permission android:name="android.permission.VIBRATE"/>' '<application android:allowBackup="true" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:label="JEE Focus Command" android:theme="@style/Theme.Material3.DayNight.NoActionBar">' '<activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask">' '<intent-filter>' '<action android:name="android.intent.action.MAIN"/>' '<category android:name="android.intent.category.LAUNCHER"/>' '</intent-filter>' '</activity>' '<service android:name=".FocusAccessibilityService" android:exported="true" android:label="JEE Focus Shield" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">' '<intent-filter>' '<action android:name="android.accessibilityservice.AccessibilityService"/>' '</intent-filter>' '<meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config"/>' '</service>' '<receiver android:name=".ReminderReceiver" android:exported="false"/>' '</application>' '</manifest>' > app/src/main/AndroidManifest.xml
+          rm -rf app build.gradle settings.gradle gradle.properties
+          mkdir -p app/src/main/java/com/example/myandroidapp
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/xml
+
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "JEEFocusApp"
+          include ':app'
+          EOF
+
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.5.2' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.24' apply false
+          }
+          EOF
+
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+          android {
+              namespace 'com.example.myandroidapp'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.harsh.jeeprep.tracker"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 9
+                  versionName "4.0"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/ic_launcher.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#0B0914" android:pathData="M0,0h108v108h-108z"/>
+              <path android:fillColor="#6C47FF" android:pathData="M54,18 L86,84 L70,84 L54,48 L38,84 L22,84 Z"/>
+              <path android:fillColor="#00E5A3" android:pathData="M43,66 L65,66 L71,78 L37,78 Z"/>
+          </vector>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/xml/accessibility_service_config.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+              android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+              android:accessibilityFeedbackType="feedbackGeneric"
+              android:accessibilityFlags="flagReportViewIds"
+              android:canRetrieveWindowContent="true"
+              android:notificationTimeout="120" />
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:roundIcon="@drawable/ic_launcher"
+                  android:label="JEE Ascend"
+                  android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTask">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <service
+                      android:name=".FocusAccessibilityService"
+                      android:exported="true"
+                      android:label="JEE Focus Shield"
+                      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+                      <intent-filter>
+                          <action android:name="android.accessibilityservice.AccessibilityService" />
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.accessibilityservice"
+                          android:resource="@xml/accessibility_service_config" />
+                  </service>
+                  <receiver android:name=".ReminderReceiver" android:exported="false" />
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/example/myandroidapp/MainActivity.kt
+          package com.example.myandroidapp
+
+          import android.accessibilityservice.AccessibilityService
+          import android.animation.ValueAnimator
+          import android.app.*
+          import android.content.*
+          import android.content.pm.PackageManager
+          import android.content.res.ColorStateList
+          import android.graphics.*
+          import android.graphics.drawable.GradientDrawable
+          import android.graphics.drawable.RippleDrawable
+          import android.net.Uri
+          import android.os.*
+          import android.provider.Settings
+          import android.text.TextUtils
+          import android.util.LruCache
+          import android.util.TypedValue
+          import android.view.*
+          import android.view.accessibility.AccessibilityEvent
+          import android.view.accessibility.AccessibilityNodeInfo
+          import android.view.animation.DecelerateInterpolator
+          import android.view.animation.OvershootInterpolator
+          import android.widget.*
+          import androidx.activity.result.ActivityResultLauncher
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.core.app.ActivityCompat
+          import androidx.core.app.NotificationCompat
+          import androidx.core.content.ContextCompat
+          import org.json.JSONArray
+          import org.json.JSONObject
+          import java.io.BufferedReader
+          import java.io.InputStreamReader
+          import java.net.HttpURLConnection
+          import java.net.URL
+          import java.text.SimpleDateFormat
+          import java.util.*
+          import java.util.concurrent.Executors
+          import kotlin.math.max
+          import kotlin.math.roundToInt
+
+          // ============================================================================
+          // 1. SMART ACCESSIBILITY SERVICE (ALLOWS CHROME; ONLY BLOCKS TYPED KEYWORDS)
+          // ============================================================================
+          class FocusAccessibilityService : AccessibilityService() {
+              private var unlockReceiver: BroadcastReceiver? = null
+              private var lastBlockedTime = 0L
+
+              private val blockedNativeApps = setOf(
+                  "com.google.android.youtube", "com.instagram.android",
+                  "com.zhiliaoapp.musically", "com.ss.android.ugc.trill",
+                  "com.snapchat.android", "com.facebook.katana", "com.reddit.frontpage"
+              )
+              private val browsers = setOf(
+                  "com.android.chrome", "org.mozilla.firefox", "com.microsoft.emmx",
+                  "com.brave.browser", "com.sec.android.app.sbrowser",
+                  "com.opera.browser", "com.opera.mini.native", "com.UCMobile.intl"
+              )
+              private val blockedKeywords = listOf(
+                  "youtube.com", "m.youtube.com", "youtu.be", "instagram.com",
+                  "pornhub", "xvideos", "xnxx", "xhamster", "redtube", "youporn",
+                  "spankbang", "onlyfans", "chaturbate", "stripchat", "brazzers",
+                  "eporner", "hqporner", "porn", "xxx"
+              )
+              private val callPackages = setOf(
+                  "com.google.android.dialer", "com.android.dialer", "com.android.incallui",
+                  "com.android.server.telecom", "com.samsung.android.incallui",
+                  "com.samsung.android.dialer", "com.coloros.phonemanager",
+                  "com.android.contacts", "com.android.systemui", "android"
+              )
+
+              override fun onServiceConnected() {
+                  super.onServiceConnected()
+                  if (unlockReceiver == null) {
+                      unlockReceiver = object : BroadcastReceiver() {
+                          override fun onReceive(c: Context, i: Intent) {
+                              if (i.action == Intent.ACTION_USER_PRESENT) checkMorningQuote(c)
+                          }
+                      }
+                      val f = IntentFilter(Intent.ACTION_USER_PRESENT)
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                          registerReceiver(unlockReceiver, f, Context.RECEIVER_EXPORTED)
+                      } else {
+                          registerReceiver(unlockReceiver, f)
+                      }
+                  }
+              }
+
+              private fun checkMorningQuote(c: Context) {
+                  val p = c.getSharedPreferences("jee_command_db", Context.MODE_PRIVATE)
+                  val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                  if (p.getString("last_morning_quote_date", "") != today) {
+                      p.edit().putString("last_morning_quote_date", today).apply()
+                      c.startActivity(Intent(c, MainActivity::class.java).apply {
+                          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                          putExtra("MORNING_UNLOCK_QUOTE", true)
+                      })
+                  }
+              }
+
+              override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+                  val pkg = event?.packageName?.toString() ?: return
+                  val kg = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+                  if (kg?.isKeyguardLocked == false) checkMorningQuote(this)
+
+                  if (pkg == applicationContext.packageName || pkg.contains("inputmethod") ||
+                      pkg.contains("keyboard") || pkg.contains("launcher") ||
+                      pkg.contains("permissioncontroller") || pkg.contains("systemui")) return
+
+                  val p = getSharedPreferences("jee_command_db", Context.MODE_PRIVATE)
+                  val focusActive = p.getLong("focus_end_ms", 0L) > System.currentTimeMillis()
+                  val shieldOn = p.getBoolean("always_shield_enabled", true)
+
+                  // 1. Hardcore Focus Session (1h-5h): Block non-call external apps
+                  if (focusActive) {
+                      val isCall = callPackages.contains(pkg) || pkg.contains("dialer") ||
+                              pkg.contains("incall") || pkg.contains("telecom") || pkg.contains("phone")
+                      if (!isCall) {
+                          redirectHome("Focus Mode Active! Only Phone Calls & JEE Ascend allowed.")
+                          return
+                      }
+                  }
+
+                  // 2. 24/7 Shield: Block native YouTube/Instagram apps, allow Chrome to open
+                  if (shieldOn || focusActive) {
+                      if (blockedNativeApps.contains(pkg)) {
+                          redirectHome("Blocked by JEE Ascend Shield!")
+                          return
+                      }
+                      // 3. Inside Chrome/Browsers: Only block if address bar contains a restricted keyword
+                      if (browsers.contains(pkg) || pkg.contains("browser") || pkg.contains("chrome")) {
+                          val root = rootInActiveWindow ?: return
+                          val custom = (p.getString("custom_blocked_sites", "") ?: "")
+                              .split(",").map { it.trim().lowercase() }.filter { it.length >= 3 }
+                          val kwList = blockedKeywords + custom
+                          val hit = findUrlBarMatch(root, kwList)
+                          if (hit != null) {
+                              val now = System.currentTimeMillis()
+                              if (now - lastBlockedTime > 1400L) {
+                                  lastBlockedTime = now
+                                  performGlobalAction(GLOBAL_ACTION_BACK)
+                                  Handler(Looper.getMainLooper()).postDelayed({
+                                      Toast.makeText(applicationContext, "Blocked restricted site: $hit", Toast.LENGTH_SHORT).show()
+                                  }, 150)
+                              }
+                          }
+                      }
+                  }
+              }
+
+              private fun findUrlBarMatch(n: AccessibilityNodeInfo?, kwList: List<String>): String? {
+                  if (n == null) return null
+                  val id = n.viewIdResourceName?.lowercase() ?: ""
+                  if (id.contains("url_bar") || id.contains("omnibox") || id.contains("location_bar") ||
+                      id.contains("address_bar") || id.contains("mozac_browser_toolbar_url")) {
+                      val t = n.text?.toString()?.lowercase()?.trim() ?: ""
+                      if (t.isNotEmpty() && !t.contains("search or type") && !t.contains("search google")) {
+                          for (kw in kwList) if (t.contains(kw)) return kw
+                      }
+                  }
+                  for (i in 0 until n.childCount) {
+                      val m = findUrlBarMatch(n.getChild(i), kwList)
+                      if (m != null) return m
+                  }
+                  return null
+              }
+
+              private fun redirectHome(msg: String) {
+                  val now = System.currentTimeMillis()
+                  if (now - lastBlockedTime < 1300L) return
+                  lastBlockedTime = now
+                  performGlobalAction(GLOBAL_ACTION_HOME)
+                  Handler(Looper.getMainLooper()).postDelayed({
+                      Toast.makeText(applicationContext, msg, Toast.LENGTH_LONG).show()
+                      startActivity(Intent(applicationContext, MainActivity::class.java).apply {
+                          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                      })
+                  }, 200)
+              }
+
+              override fun onInterrupt() {}
+          }
+
+          class ReminderReceiver : BroadcastReceiver() {
+              override fun onReceive(context: Context, intent: Intent) {
+                  val title = intent.getStringExtra("TITLE") ?: "JEE Ascend"
+                  val msg = intent.getStringExtra("MESSAGE") ?: "Time for your scheduled study block!"
+                  val id = intent.getIntExtra("NOTIF_ID", 1001)
+                  val chId = "jee_ascend_channel"
+                  val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      nm.createNotificationChannel(NotificationChannel(chId, "JEE Ascend Alerts", NotificationManager.IMPORTANCE_HIGH))
+                  }
+                  val pi = PendingIntent.getActivity(context, id, Intent(context, MainActivity::class.java),
+                      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                  nm.notify(id, NotificationCompat.Builder(context, chId)
+                      .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                      .setContentTitle(title).setContentText(msg)
+                      .setStyle(NotificationCompat.BigTextStyle().bigText(msg))
+                      .setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(pi).build())
+              }
+          }
+
+          // ============================================================================
+          // 2. HERO ROOFTOP ASPIRANT + FROSTED COUNTDOWN VIEW (SCREEN 1 TOP)
+          // ============================================================================
+          class AscendHeroCountdownView(context: Context) : View(context) {
+              private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+              private val path = Path()
+              private val r = RectF()
+              private var dStr = "548"; private var hStr = "10"; private var mStr = "32"; private var sStr = "17"
+              private var quoteStr = "\"Dream Big. Study Hard.\""
+              private var titleStr = "JEE 2027 Countdown"
+
+              fun update(d: Long, h: Long, m: Long, s: Long, q: String, t: String) {
+                  dStr = String.format(Locale.US, "%02d", d)
+                  hStr = String.format(Locale.US, "%02d", h)
+                  mStr = String.format(Locale.US, "%02d", m)
+                  sStr = String.format(Locale.US, "%02d", s)
+                  quoteStr = q; titleStr = t
+                  invalidate()
+              }
+
+              override fun onMeasure(wSpec: Int, hSpec: Int) {
+                  setMeasuredDimension(MeasureSpec.getSize(wSpec), (300 * resources.displayMetrics.density).roundToInt())
+              }
+
+              override fun onDraw(c: Canvas) {
+                  super.onDraw(c)
+                  val dp = resources.displayMetrics.density
+                  val w = width.toFloat(); val h = height.toFloat()
+
+                  // Night Sky Cosmic Gradient
+                  p.style = Paint.Style.FILL
+                  p.shader = LinearGradient(0f, 0f, 0f, h,
+                      intArrayOf(Color.parseColor("#0D0A1A"), Color.parseColor("#1A1438"), Color.parseColor("#110E20")),
+                      floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+                  r.set(0f, 0f, w, h); c.drawRoundRect(r, 24f * dp, 24f * dp, p); p.shader = null
+
+                  // Stars & Shooting Star
+                  p.color = Color.parseColor("#88FFFFFF")
+                  c.drawCircle(w * 0.45f, 22f * dp, 1.3f * dp, p)
+                  c.drawCircle(w * 0.62f, 16f * dp, 1.6f * dp, p)
+                  c.drawCircle(w * 0.82f, 28f * dp, 1.2f * dp, p)
+                  p.strokeWidth = 1.5f * dp; p.color = Color.parseColor("#AA93C5FD")
+                  c.drawLine(w * 0.46f, 38f * dp, w * 0.58f, 22f * dp, p)
+
+                  // Brand Logo 'A' + JEE Ascend Header
+                  path.reset()
+                  path.moveTo(28f * dp, 18f * dp); path.lineTo(44f * dp, 52f * dp)
+                  path.lineTo(36f * dp, 52f * dp); path.lineTo(28f * dp, 34f * dp)
+                  path.lineTo(20f * dp, 52f * dp); path.lineTo(12f * dp, 52f * dp); path.close()
+                  p.color = Color.parseColor("#7C4DFF"); c.drawPath(path, p)
+                  p.color = Color.parseColor("#00E5A3")
+                  r.set(21f * dp, 41f * dp, 35f * dp, 46f * dp); c.drawRoundRect(r, 2f * dp, 2f * dp, p)
+
+                  p.color = Color.WHITE; p.textSize = 17f * dp
+                  p.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                  c.drawText("JEE", 52f * dp, 31f * dp, p)
+                  c.drawText("Ascend", 52f * dp, 48f * dp, p)
+                  p.color = Color.parseColor("#94A3B8"); p.textSize = 9.5f * dp; p.typeface = Typeface.DEFAULT
+                  c.drawText("Plan. Study. Crack.", 52f * dp, 60f * dp, p)
+
+                  // Distant City Lights Bokeh
+                  val cityColors = intArrayOf(Color.parseColor("#55FBBF24"), Color.parseColor("#5538BDF8"), Color.parseColor("#55A855F7"))
+                  for (i in 0..16) {
+                      p.color = cityColors[i % 3]
+                      c.drawCircle((18f + i * 21f) * dp, 122f * dp + (i % 3) * 4f * dp, 2.5f * dp, p)
+                  }
+
+                  // Rooftop Ledge & Seated Student Silhouette
+                  p.color = Color.parseColor("#18132C")
+                  r.set(w * 0.48f, 118f * dp, w, 136f * dp); c.drawRect(r, p)
+                  val sx = w * 0.72f; val sy = 74f * dp
+                  p.color = Color.parseColor("#090710")
+                  c.drawCircle(sx, sy, 8.5f * dp, p) // Head
+                  r.set(sx - 8f * dp, sy + 8f * dp, sx + 10f * dp, sy + 42f * dp)
+                  c.drawRoundRect(r, 6f * dp, 6f * dp, p) // Torso/Hoodie
+                  c.drawLine(sx - 6f * dp, sy + 38f * dp, sx - 22f * dp, sy + 26f * dp, p)
+
+                  // Frosted Glass Countdown Card
+                  val cardTop = 132f * dp; val cardBot = 258f * dp
+                  p.color = Color.parseColor("#CC17132B")
+                  r.set(14f * dp, cardTop, w - 14f * dp, cardBot)
+                  c.drawRoundRect(r, 20f * dp, 20f * dp, p)
+                  p.style = Paint.Style.STROKE; p.strokeWidth = 1.2f * dp; p.color = Color.parseColor("#3D3366")
+                  c.drawRoundRect(r, 20f * dp, 20f * dp, p); p.style = Paint.Style.FILL
+
+                  p.textAlign = Paint.Align.CENTER
+                  p.color = Color.parseColor("#E2E8F0"); p.textSize = 13.5f * dp
+                  p.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                  c.drawText(titleStr, w * 0.5f, cardTop + 26f * dp, p)
+
+                  // Giant Countdown Digits: 548 : 10 : 32 : 17
+                  p.color = Color.WHITE; p.textSize = 32f * dp
+                  p.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                  c.drawText("$dStr : $hStr : $mStr : $sStr", w * 0.5f, cardTop + 72f * dp, p)
+
+                  p.color = Color.parseColor("#94A3B8"); p.textSize = 11.5f * dp; p.typeface = Typeface.DEFAULT
+                  c.drawText("Days            Hours         Minutes       Seconds", w * 0.5f, cardTop + 96f * dp, p)
+
+                  p.color = Color.parseColor("#CBD5E1"); p.textSize = 13f * dp
+                  p.typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+                  c.drawText(quoteStr, w * 0.5f, 282f * dp, p)
+                  p.textAlign = Paint.Align.LEFT
+              }
+          }
+
+          // ============================================================================
+          // 3. CIRCULAR RADIAL RING VIEW (USED IN SYLLABUS & 3-RING ANALYTICS)
+          // ============================================================================
+          class RadialDonutView(
+              context: Context,
+              private val pct: Int,
+              private val ringColor: Int,
+              private val sizeDp: Int = 82,
+              private val labelUnder: String? = null
+          ) : View(context) {
+              private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+              private val arc = RectF()
+              private var animProg = 0f
+
+              init {
+                  ValueAnimator.ofFloat(0f, 1f).apply {
+                      duration = 650L
+                      interpolator = DecelerateInterpolator(1.6f)
+                      addUpdateListener { animProg = it.animatedValue as Float; invalidate() }
+                      start()
+                  }
+              }
+
+              override fun onMeasure(wSpec: Int, hSpec: Int) {
+                  val d = resources.displayMetrics.density
+                  val w = (sizeDp * d).roundToInt()
+                  val extraH = if (labelUnder != null) (24 * d).roundToInt() else 0
+                  setMeasuredDimension(w, w + extraH)
+              }
+
+              override fun onDraw(c: Canvas) {
+                  super.onDraw(c)
+                  val d = resources.displayMetrics.density
+                  val s = sizeDp * d
+                  val stroke = 8.5f * d
+                  val pad = stroke / 2f + 3f * d
+                  arc.set(pad, pad, s - pad, s - pad)
+
+                  p.style = Paint.Style.STROKE; p.strokeWidth = stroke; p.strokeCap = Paint.Cap.ROUND
+                  p.color = Color.parseColor("#262142")
+                  c.drawOval(arc, p)
+
+                  p.color = ringColor
+                  c.drawArc(arc, -90f, 360f * (pct / 100f) * animProg, false, p)
+
+                  p.style = Paint.Style.FILL; p.textAlign = Paint.Align.CENTER
+                  p.color = Color.WHITE; p.textSize = (sizeDp * 0.22f) * d
+                  p.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                  c.drawText("${(pct * animProg).roundToInt()}%", s / 2f, s / 2f + 6f * d, p)
+
+                  if (labelUnder != null) {
+                      p.color = Color.parseColor("#CBD5E1"); p.textSize = 12f * d; p.typeface = Typeface.DEFAULT
+                      c.drawText(labelUnder, s / 2f, s + 16f * d, p)
+                  }
+              }
+          }
+
+          // ============================================================================
+          // 4. MAIN ACTIVITY: ALL 7 SCREENS OF JEE ASCEND
+          // ============================================================================
+          class MainActivity : AppCompatActivity() {
+              private lateinit var prefs: SharedPreferences
+              private var heroView: AscendHeroCountdownView? = null
+              private lateinit var mainScroll: ScrollView
+              private lateinit var contentCol: LinearLayout
+              private val navViews = mutableListOf<LinearLayout>()
+
+              // Screens: 0=Home, 1=Timetable, 2=Syllabus, 3=ErrorLog, 4=Analytics, 5=StudyPlan, 6=Settings
+              private var currentScreen = 0
+              private var selectedSubj = "Physics"
+              private var selectedDay = "Mon"
+              private var expandedChapter = ""
+              private var errFilter = "All"
+              private var planTabActive = true
+
+              private val weekDays = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+              private val imgPool = Executors.newFixedThreadPool(2)
+              private val bmpCache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
+                  override fun sizeOf(k: String, v: Bitmap): Int = v.byteCount
+              }
+
+              private lateinit var sheetPicker: ActivityResultLauncher<Array<String>>
+              private lateinit var errPicker: ActivityResultLauncher<Array<String>>
+              private lateinit var ttPicker: ActivityResultLauncher<Array<String>>
+              private var pSheetTitle = ""; private var pSheetSubj = "Physics"
+              private var pErrSubj = "Physics"; private var pErrChap = ""; private var pErrNote = ""
+
+              private val uiHandler = Handler(Looper.getMainLooper())
+              private val tick = object : Runnable {
+                  override fun run() { refreshClock(); uiHandler.postDelayed(this, 1000L) }
+              }
+
+              private val syllabus = mapOf(
+                  "Physics" to listOf(
+                      "Mechanics", "Kinematics (1D & 2D)", "Laws of Motion",
+                      "Work, Energy & Power", "Rotational Motion", "Gravitation",
+                      "Electrodynamics", "Electrostatics", "Current Electricity",
+                      "Magnetism", "EMI", "Ray Optics", "Wave Optics", "Modern Physics"
+                  ),
+                  "Chemistry" to listOf(
+                      "Mole Concept", "Atomic Structure", "Chemical Bonding",
+                      "Thermodynamics", "Chemical & Ionic Equilibrium", "Electrochemistry",
+                      "Chemical Kinetics", "Coordination Compounds", "Organic: GOC",
+                      "Hydrocarbons", "Haloalkanes & Haloarenes", "Aldehydes & Ketones", "Amines"
+                  ),
+                  "Mathematics" to listOf(
+                      "Quadratic Equations", "Complex Numbers", "Matrices & Determinants",
+                      "Permutations & Combinations", "Limits & Continuity", "Application of Derivatives",
+                      "Indefinite & Definite Integration", "Differential Equations",
+                      "Straight Lines & Circles", "Conic Sections", "Vectors & 3D", "Probability"
+                  )
+              )
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  window.statusBarColor = Color.parseColor("#0B0914")
+                  window.navigationBarColor = Color.parseColor("#0B0914")
+                  prefs = getSharedPreferences("jee_command_db", Context.MODE_PRIVATE)
+
+                  if (!prefs.contains("jee_target_ms")) {
+                      val c = Calendar.getInstance().apply { set(2027, Calendar.JANUARY, 20, 9, 0, 0) }
+                      prefs.edit().putLong("jee_target_ms", c.timeInMillis).apply()
+                  }
+
+                  seedInitialDataIfNeeded()
+                  initPickers()
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                      ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                      ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+                  }
+
+                  buildShell()
+                  checkPyqAlerts(false)
+
+                  val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                  val unlock = intent.getBooleanExtra("MORNING_UNLOCK_QUOTE", false)
+                  if (unlock || prefs.getString("last_morning_quote_date", "") != today) {
+                      prefs.edit().putString("last_morning_quote_date", today).apply()
+                      showQuoteModal(unlock)
+                  }
+              }
+
+              override fun onResume() { super.onResume(); uiHandler.post(tick); renderScreen(false, true) }
+              override fun onPause() { super.onPause(); uiHandler.removeCallbacks(tick) }
+
+              private fun dp(v: Int): Int = (v * resources.displayMetrics.density).roundToInt()
+              private fun dpF(v: Float): Float = v * resources.displayMetrics.density
+
+              private fun spring(v: View, click: () -> Unit) {
+                  v.isClickable = true; v.isFocusable = true
+                  v.setOnTouchListener { view, ev ->
+                      when (ev.actionMasked) {
+                          MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.95f).scaleY(0.95f).setDuration(80).setInterpolator(DecelerateInterpolator()).start()
+                          MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).setDuration(165).setInterpolator(OvershootInterpolator(1.6f)).start()
+                      }
+                      false
+                  }
+                  v.setOnClickListener { click() }
+              }
+
+              private fun ripple(fill: String, rad: Float, stroke: String? = null): RippleDrawable {
+                  val gd = GradientDrawable().apply {
+                      setColor(Color.parseColor(fill)); cornerRadius = dpF(rad)
+                      if (stroke != null) setStroke(dp(1).coerceAtLeast(1), Color.parseColor(stroke))
+                  }
+                  val mask = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dpF(rad) }
+                  return RippleDrawable(ColorStateList.valueOf(Color.parseColor("#2AFFFFFF")), gd, mask)
+              }
+
+              private fun grad(c1: String, c2: String, rad: Float, stroke: String? = null): GradientDrawable {
+                  return GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Color.parseColor(c1), Color.parseColor(c2))).apply {
+                      cornerRadius = dpF(rad)
+                      if (stroke != null) setStroke(dp(1), Color.parseColor(stroke))
+                  }
+              }
+
+              private fun seedInitialDataIfNeeded() {
+                  if (prefs.getBoolean("ascend_seeded_v4", false)) return
+                  val defDays = mapOf(
+                      "Mon" to listOf(Pair("Revision: Kinematics", "2:00 PM - 3:30 PM"), Pair("PYQs (2019-24)", "7:00 PM - 8:00 PM")),
+                      "Tue" to listOf(Pair("Chemistry: GOC", "2:00 PM - 4:00 PM"), Pair("Mock Test (Full)", "7:00 PM - 10:00 PM")),
+                      "Wed" to listOf(Pair("Physics: Laws of Motion", "2:00 PM - 3:30 PM"), Pair("Maths: Quadratic Eq.", "7:00 PM - 8:30 PM")),
+                      "Thu" to listOf(Pair("Physics: Electrodynamics", "4:00 PM - 6:00 PM"), Pair("Chemistry: Thermodynamics", "8:00 PM - 9:30 PM")),
+                      "Fri" to listOf(Pair("Maths: Definite Integration", "4:00 PM - 6:00 PM"), Pair("Error Log Revision", "8:30 PM - 10:00 PM")),
+                      "Sat" to listOf(Pair("Physics: Ray Optics PYQs", "10:00 AM - 12:30 PM"), Pair("Chemistry: Coordination", "4:00 PM - 6:00 PM")),
+                      "Sun" to listOf(Pair("Full 3-Hour JEE Main Mock Test", "9:00 AM - 12:00 PM"), Pair("Mock Test Mistake Analysis", "4:00 PM - 6:00 PM"))
+                  )
+                  for ((d, list) in defDays) {
+                      val arr = JSONArray()
+                      for ((task, time) in list) {
+                          arr.put(JSONObject().apply { put("task", task); put("time", time); put("done", d == "Mon") })
+                      }
+                      saveArr("schedule_$d", arr)
+                  }
+                  // Seed 1 completed chapter so Spaced Repetition is visible immediately
+                  prefs.edit()
+                      .putInt("status_Physics_Mechanics", 2)
+                      .putLong("time_Physics_Mechanics", System.currentTimeMillis() - 2L * 86400000L)
+                      .putInt("status_Physics_Electrodynamics", 1)
+                      .putBoolean("ascend_seeded_v4", true)
+                      .apply()
+              }
+
+              private fun initPickers() {
+                  sheetPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { u: Uri? ->
+                      if (u != null) {
+                          try { contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+                          val arr = getArr("worksheets_list")
+                          arr.put(JSONObject().apply { put("title", pSheetTitle); put("subject", pSheetSubj); put("uri", u.toString()); put("done", false) })
+                          saveArr("worksheets_list", arr); renderScreen(false, true)
+                      }
+                  }
+                  errPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { u: Uri? ->
+                      if (u != null) {
+                          try { contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+                          saveErrorItem(pErrSubj, pErrChap, pErrNote, u.toString())
+                          Toast.makeText(this, "Error saved to $pErrChap!", Toast.LENGTH_SHORT).show()
+                          renderScreen(false, true)
+                      }
+                  }
+                  ttPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { u: Uri? ->
+                      if (u != null) {
+                          try { contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+                          prefs.edit().putString("uploaded_timetable_uri", u.toString()).apply()
+                          renderScreen(false, true)
+                      }
+                  }
+              }
+
+              // ========================================================================
+              // SHELL + BOTTOM NAVIGATION BAR WITH GLOWING CENTER ANALYTICS ORB
+              // ========================================================================
+              private fun buildShell() {
+                  val root = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setBackgroundColor(Color.parseColor("#0B0914"))
+                  }
+
+                  mainScroll = ScrollView(this).apply {
+                      isVerticalScrollBarEnabled = false
+                      overScrollMode = View.OVER_SCROLL_NEVER
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+                  }
+                  contentCol = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setPadding(dp(16), dp(10), dp(16), dp(28))
+                  }
+                  mainScroll.addView(contentCol)
+
+                  // Bottom Navigation Bar (Matches Home | Study | [📊 Center Orb] | Progress | More)
+                  val navBar = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                      background = grad("#161229", "#0E0B1B", 24f, "#282246")
+                      setPadding(dp(8), dp(8), dp(8), dp(8))
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          setMargins(dp(14), dp(4), dp(14), dp(12))
+                      }
+                  }
+
+                  val items = listOf(
+                      Triple("⌂", "Home", 0),
+                      Triple("📖", "Study", 2),
+                      Triple("ll", "Analytics", 4),
+                      Triple("📅", "Timetable", 1),
+                      Triple("☰", "More", 6)
+                  )
+
+                  navViews.clear()
+                  for ((idx, item) in items.withIndex()) {
+                      val (sym, lbl, targetScreen) = item
+                      val col = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          gravity = Gravity.CENTER
+                          layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                      }
+
+                      if (idx == 2) {
+                          // Center Glowing Purple Analytics Circle
+                          val orb = TextView(this).apply {
+                              text = "📊"
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                              setTextColor(Color.WHITE)
+                              gravity = Gravity.CENTER
+                              background = grad("#8B5CF6", "#5B21B6", 50f, "#C4B5FD")
+                              layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
+                          }
+                          col.addView(orb)
+                      } else {
+                          col.addView(TextView(this).apply {
+                              text = sym
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                              setTextColor(Color.parseColor("#CBD5E1"))
+                              gravity = Gravity.CENTER
+                          })
+                          col.addView(TextView(this).apply {
+                              text = lbl
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                              setTextColor(Color.parseColor("#94A3B8"))
+                              setTypeface(null, Typeface.BOLD)
+                              setPadding(0, dp(2), 0, 0)
+                          })
+                      }
+
+                      spring(col) {
+                          currentScreen = targetScreen
+                          renderScreen(true, false)
+                      }
+                      navViews.add(col)
+                      navBar.addView(col)
+                  }
+
+                  root.addView(mainScroll)
+                  root.addView(navBar)
+                  setContentView(root)
+                  renderScreen(true, false)
+              }
+
+              private fun refreshClock() {
+                  val hv = heroView ?: return
+                  val target = prefs.getLong("jee_target_ms", 0L)
+                  val now = System.currentTimeMillis()
+                  val diff = max(0L, target - now)
+                  val d = diff / 86400000L
+                  val h = (diff / 3600000L) % 24
+                  val m = (diff / 60000L) % 60
+                  val s = (diff / 1000L) % 60
+                  val fEnd = prefs.getLong("focus_end_ms", 0L)
+                  val q = if (fEnd > now) "🔒 Focus Lockdown (${((fEnd - now) / 60000L) + 1}m left) • Calls Allowed"
+                  else prefs.getString("cached_daily_quote", "\"Dream Big. Study Hard.\"") ?: "\"Dream Big. Study Hard.\""
+                  hv.update(d, h, m, s, q, "JEE 2027 Countdown")
+              }
+
+              private fun renderScreen(animate: Boolean, keepScroll: Boolean) {
+                  val sy = if (keepScroll) mainScroll.scrollY else 0
+                  contentCol.removeAllViews()
+                  heroView = null
+
+                  when (currentScreen) {
+                      0 -> buildHomeScreen()
+                      1 -> buildTimetableScreen()
+                      2 -> buildSyllabusScreen()
+                      3 -> buildErrorLogScreen()
+                      4 -> buildAnalyticsScreen()
+                      5 -> buildStudyPlanScreen()
+                      6 -> buildSettingsScreen()
+                  }
+
+                  if (animate) {
+                      contentCol.alpha = 0f
+                      contentCol.translationY = dpF(14f)
+                      contentCol.animate().alpha(1f).translationY(0f).setDuration(210).setInterpolator(DecelerateInterpolator()).start()
+                  }
+                  mainScroll.post { mainScroll.scrollTo(0, sy) }
+              }
+
+              private fun topScreenHeader(titleText: String, rightSymbol: String = "⌕", onRightClick: (() -> Unit)? = null): LinearLayout {
+                  return LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          bottomMargin = dp(14)
+                      }
+                      val backTv = TextView(this@MainActivity).apply {
+                          text = "←"
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                          setTextColor(Color.WHITE)
+                          setPadding(dp(4), dp(4), dp(14), dp(4))
+                      }
+                      spring(backTv) { currentScreen = 0; renderScreen(true, false) }
+                      addView(backTv)
+
+                      addView(TextView(this@MainActivity).apply {
+                          text = titleText
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 19f)
+                          setTextColor(Color.WHITE)
+                          setTypeface(null, Typeface.BOLD)
+                          layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                      })
+
+                      if (onRightClick != null) {
+                          val rTv = TextView(this@MainActivity).apply {
+                              text = rightSymbol
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                              setTextColor(Color.parseColor("#A5B4FC"))
+                              background = ripple("#1A1630", 10f, "#2E2752")
+                              setPadding(dp(10), dp(6), dp(10), dp(6))
+                          }
+                          spring(rTv) { onRightClick() }
+                          addView(rTv)
+                      }
+                  }
+              }
+
+              // ========================================================================
+              // SCREEN 0: HOME (ROOFTOP HERO + STREAK + 3x2 BENTO GRID + TODAY'S GOAL)
+              // ========================================================================
+              private fun buildHomeScreen() {
+                  val hv = AscendHeroCountdownView(this).apply {
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          bottomMargin = dp(14)
+                      }
+                  }
+                  spring(hv) { pickExamDate() }
+                  heroView = hv
+                  contentCol.addView(hv)
+                  refreshClock()
+
+                  // Streak Card (🔥 37 Days + Mini Rising Purple Bars)
+                  val streakCard = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                      background = grad("#231942", "#17132B", 18f, "#3D326B")
+                      setPadding(dp(16), dp(14), dp(16), dp(14))
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          bottomMargin = dp(14)
+                      }
+                  }
+                  streakCard.addView(TextView(this).apply {
+                      text = "🔥"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+                      setPadding(0, 0, dp(12), 0)
+                  })
+                  val stCol = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                  }
+                  stCol.addView(TextView(this).apply {
+                      text = "Streak"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+                      setTextColor(Color.parseColor("#CBD5E1"))
+                  })
+                  stCol.addView(TextView(this).apply {
+                      text = "${prefs.getInt("study_streak_days", 37)} Days"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                  })
+                  streakCard.addView(stCol)
+
+                  val barsWrap = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.BOTTOM
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32))
+                  }
+                  for (h in listOf(6, 10, 14, 12, 18, 24, 30)) {
+                      barsWrap.addView(View(this).apply {
+                          background = ripple("#8B5CF6", 3f)
+                          layoutParams = LinearLayout.LayoutParams(dp(5), dp(h)).apply { leftMargin = dp(4) }
+                      })
+                  }
+                  streakCard.addView(barsWrap)
+                  spring(streakCard) { currentScreen = 4; renderScreen(true, false) }
+                  contentCol.addView(streakCard)
+
+                  // 3x2 Bento Grid (Timetable, Syllabus, Error Log / Analytics, Study Plan, Settings)
+                  val bentoItems = listOf(
+                      Triple("📅", "Timetable", 1),
+                      Triple("📖", "Syllabus", 2),
+                      Triple("⚠️", "Error Log", 3),
+                      Triple("📊", "Analytics", 4),
+                      Triple("🎯", "Study Plan", 5),
+                      Triple("⚙️", "Settings", 6)
+                  )
+                  for (rowIdx in 0..1) {
+                      val row = LinearLayout(this).apply {
+                          orientation = LinearLayout.HORIZONTAL
+                          layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                              bottomMargin = dp(10)
+                          }
+                      }
+                      for (colIdx in 0..2) {
+                          val (ic, title, screenTarget) = bentoItems[rowIdx * 3 + colIdx]
+                          val tile = LinearLayout(this).apply {
+                              orientation = LinearLayout.VERTICAL
+                              gravity = Gravity.CENTER
+                              background = ripple("#161329", 18f, "#2B254A")
+                              setPadding(dp(10), dp(16), dp(10), dp(16))
+                              layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                                  setMargins(dp(4), 0, dp(4), 0)
+                              }
+                          }
+                          tile.addView(TextView(this).apply {
+                              text = ic
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                              gravity = Gravity.CENTER
+                          })
+                          tile.addView(TextView(this).apply {
+                              text = title
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                              setTextColor(Color.WHITE)
+                              setTypeface(null, Typeface.BOLD)
+                              setPadding(0, dp(8), 0, 0)
+                              gravity = Gravity.CENTER
+                          })
+                          spring(tile) { currentScreen = screenTarget; renderScreen(true, false) }
+                          row.addView(tile)
+                      }
+                      contentCol.addView(row)
+                  }
+
+                  // Today's Goal Card (Bottom of Home Screen)
+                  val goalCard = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                      background = grad("#21183C", "#151226", 18f, "#3D326B")
+                      setPadding(dp(16), dp(16), dp(16), dp(16))
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                  }
+                  goalCard.addView(TextView(this).apply {
+                      text = "🎯"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+                      setPadding(0, 0, dp(12), 0)
+                  })
+                  val gCol = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                  }
+                  gCol.addView(TextView(this).apply {
+                      text = "Today's Goal"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+                      setTextColor(Color.parseColor("#A5B4FC"))
+                  })
+                  val todayGoalStr = prefs.getString("custom_today_goal", "Complete Kinematics (1D, 2D) + PYQs") ?: ""
+                  gCol.addView(TextView(this).apply {
+                      text = todayGoalStr
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                  })
+                  goalCard.addView(gCol)
+                  goalCard.addView(TextView(this).apply {
+                      text = "›"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+                      setTextColor(Color.parseColor("#A5B4FC"))
+                  })
+                  spring(goalCard) { currentScreen = 5; renderScreen(true, false) }
+                  contentCol.addView(goalCard)
+              }
+
+              // ========================================================================
+              // SCREEN 1: TIMETABLE (DAY-WISE MON-SUN + SPACED REPETITION + ADD TASK)
+              // ========================================================================
+              private fun buildTimetableScreen() {
+                  contentCol.addView(topScreenHeader("📅  Timetable", "📄") {
+                      ttPicker.launch(arrayOf("image/*", "application/pdf"))
+                  })
+
+                  // Filter Pills: This Week | Next Week | Custom
+                  val topPills = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          bottomMargin = dp(14)
+                      }
+                  }
+                  for ((i, lbl) in listOf("This Week", "Spaced Repetition", "Upload File").withIndex()) {
+                      val p = TextView(this).apply {
+                          text = lbl
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                          setTypeface(null, Typeface.BOLD)
+                          setTextColor(Color.WHITE)
+                          background = ripple(if (i == 0) "#6C47FF" else "#18142C", 20f, if (i == 0) "#9D7BFF" else "#2B254A")
+                          setPadding(dp(14), dp(8), dp(14), dp(8))
+                          layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                              rightMargin = dp(8)
+                          }
+                      }
+                      if (i == 2) spring(p) { ttPicker.launch(arrayOf("image/*", "application/pdf")) }
+                      topPills.addView(p)
+                  }
+                  contentCol.addView(topPills)
+
+                  // Interactive Day-of-Week Selector Strip (Mon .. Sun)
+                  val dayBar = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      background = ripple("#151226", 16f, "#282246")
+                      setPadding(dp(6), dp(8), dp(6), dp(8))
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          bottomMargin = dp(14)
+                      }
+                  }
+                  val dayDates = listOf("10 Nov", "11 Nov", "12 Nov", "13 Nov", "14 Nov", "15 Nov", "16 Nov")
+                  for ((idx, dName) in weekDays.withIndex()) {
+                      val isSel = (dName == selectedDay)
+                      val dCol = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          gravity = Gravity.CENTER
+                          setPadding(dp(2), dp(6), dp(2), dp(6))
+                          layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                      }
+                      dCol.addView(TextView(this).apply {
+                          text = dName
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                          setTextColor(if (isSel) Color.WHITE else Color.parseColor("#94A3B8"))
+                          setTypeface(null, Typeface.BOLD)
+                      })
+                      dCol.addView(TextView(this).apply {
+                          text = dayDates[idx]
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.5f)
+                          setTextColor(if (isSel) Color.parseColor("#A5B4FC") else Color.parseColor("#64748B"))
+                          setPadding(0, dp(2), 0, dp(4))
+                      })
+                      dCol.addView(View(this).apply {
+                          background = ripple(if (isSel) "#6C47FF" else "#00000000", 2f)
+                          layoutParams = LinearLayout.LayoutParams(dp(22), dp(3))
+                      })
+                      spring(dCol) { selectedDay = dName; renderScreen(false, true) }
+                      dayBar.addView(dCol)
+                  }
+                  contentCol.addView(dayBar)
+
+                  // Day-Wise Cards (Selected Day First, followed by all other days so you see the full week)
+                  val orderedDays = listOf(selectedDay) + weekDays.filter { it != selectedDay }
+                  for ((dIdx, dName) in orderedDays.withIndex()) {
+                      val slots = getArr("schedule_$dName")
+                      val allDone = slots.length() > 0 && (0 until slots.length()).all { slots.getJSONObject(it).optBoolean("done", false) }
+
+                      val dayCard = LinearLayout(this).apply {
+                          orientation = LinearLayout.HORIZONTAL
+                          background = ripple(if (dIdx == 0) "#1D1738" else "#151226", 18f, if (dIdx == 0) "#6C47FF" else "#282246")
+                          setPadding(dp(16), dp(16), dp(16), dp(16))
+                          layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                              bottomMargin = dp(12)
+                          }
+                      }
+
+                      // Left Day Column (Mon / 10 Nov)
+                      val leftCol = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          layoutParams = LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.WRAP_CONTENT)
+                      }
+                      leftCol.addView(TextView(this).apply {
+                          text = dName
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                          setTextColor(Color.WHITE)
+                          setTypeface(null, Typeface.BOLD)
+                      })
+                      leftCol.addView(TextView(this).apply {
+                          text = "${slots.length()} tasks"
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                          setTextColor(Color.parseColor("#94A3B8"))
+                      })
+
+                      // Middle Check Circle
+                      val checkCircle = TextView(this).apply {
+                          text = if (allDone) "✓" else "○"
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                          setTextColor(Color.WHITE)
+                          gravity = Gravity.CENTER
+                          background = ripple(if (allDone) "#6C47FF" else "#241E3D", 50f, "#4C3FB8")
+                          layoutParams = LinearLayout.LayoutParams(dp(26), dp(26)).apply { rightMargin = dp(14) }
+                      }
+
+                      // Right Tasks Column
+                      val tasksCol = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                      }
+
+                      if (slots.length() == 0) {
+                          tasksCol.addView(TextView(this).apply {
+                              text = "No tasks scheduled for $dName. Tap + Add Task below."
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+                              setTextColor(Color.parseColor("#64748B"))
+                          })
+                      } else {
+                          for (i in 0 until slots.length()) {
+                              val o = slots.getJSONObject(i)
+                              val isDone = o.optBoolean("done", false)
+                              val itemBox = LinearLayout(this).apply {
+                                  orientation = LinearLayout.HORIZONTAL
+                                  gravity = Gravity.CENTER_VERTICAL
+                                  setPadding(0, if (i == 0) 0 else dp(10), 0, 0)
+                              }
+                              val tInfo = LinearLayout(this).apply {
+                                  orientation = LinearLayout.VERTICAL
+                                  layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                              }
+                              tInfo.addView(TextView(this).apply {
+                                  text = if (isDone) "✓ ${o.getString("task")}" else o.getString("task")
+                                  setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+                                  setTextColor(if (isDone) Color.parseColor("#00E5A3") else Color.WHITE)
+                                  setTypeface(null, Typeface.BOLD)
+                              })
+                              tInfo.addView(TextView(this).apply {
+                                  text = o.getString("time")
+                                  setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                                  setTextColor(Color.parseColor("#94A3B8"))
+                              })
+                              spring(tInfo) {
+                                  o.put("done", !isDone)
+                                  saveArr("schedule_$dName", slots)
+                                  renderScreen(false, true)
+                              }
+                              val delTv = TextView(this).apply {
+                                  text = "✕"
+                                  setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                                  setTextColor(Color.parseColor("#64748B"))
+                                  setPadding(dp(8), dp(4), dp(4), dp(4))
+                              }
+                              spring(delTv) {
+                                  val up = JSONArray()
+                                  for (j in 0 until slots.length()) if (j != i) up.put(slots.getJSONObject(j))
+                                  saveArr("schedule_$dName", up)
+                                  renderScreen(false, true)
+                              }
+                              itemBox.addView(tInfo)
+                              itemBox.addView(delTv)
+                              tasksCol.addView(itemBox)
+                          }
+                      }
+
+                      dayCard.addView(leftCol)
+                      dayCard.addView(checkCircle)
+                      dayCard.addView(tasksCol)
+                      contentCol.addView(dayCard)
+                  }
+
+                  // Floating Purple "+ Add Task" Pill Button
+                  val addTaskBtn = TextView(this).apply {
+                      text = "＋  Add Task to $selectedDay"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                      gravity = Gravity.CENTER
+                      background = grad("#7C4DFF", "#5B21B6", 50f, "#A78BFA")
+                      setPadding(dp(28), dp(14), dp(28), dp(14))
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          topMargin = dp(4); bottomMargin = dp(18)
+                      }
+                  }
+                  spring(addTaskBtn) { promptAddDayTask(selectedDay) }
+                  contentCol.addView(addTaskBtn)
+
+                  // SPACED REPETITION COMPLETED CHAPTERS TRACKER (SHOWS EVERY COMPLETED CHAPTER & DAYS AGO)
+                  val srCard = cardBox()
+                  val completedList = getCompletedChaptersWithDays()
+                  srCard.addView(badgeLabel("🔔 SPACED REPETITION • COMPLETED CHAPTERS (${completedList.size})", "#00E5A3"))
+                  srCard.addView(TextView(this).apply {
+                      text = "Every chapter marked Completed (100%) in Syllabus appears here immediately with how many days ago it was completed."
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                      setTextColor(Color.parseColor("#94A3B8"))
+                      setPadding(0, dp(4), 0, dp(10))
+                  })
+
+                  if (completedList.isEmpty()) {
+                      srCard.addView(TextView(this).apply {
+                          text = "No chapters marked Completed yet. Mark any chapter 100% in Syllabus to track it here!"
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+                          setTextColor(Color.parseColor("#94A3B8"))
+                      })
+                  } else {
+                      for ((subj, chap, daysAgo) in completedList) {
+                          val due = daysAgo >= 15L
+                          val row = LinearLayout(this).apply {
+                              orientation = LinearLayout.HORIZONTAL
+                              gravity = Gravity.CENTER_VERTICAL
+                              background = ripple(if (due) "#2D1424" else "#1C1833", 14f, if (due) "#FF5252" else "#342D5C")
+                              setPadding(dp(12), dp(12), dp(12), dp(12))
+                              layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                                  topMargin = dp(8)
+                              }
+                          }
+                          val cInfo = LinearLayout(this).apply {
+                              orientation = LinearLayout.VERTICAL
+                              layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                          }
+                          cInfo.addView(TextView(this).apply {
+                              text = "$subj • $chap"
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                              setTextColor(Color.WHITE)
+                              setTypeface(null, Typeface.BOLD)
+                          })
+                          val dayTxt = if (daysAgo == 0L) "Completed Today (0 days ago)" else "Completed $daysAgo day(s) ago"
+                          cInfo.addView(TextView(this).apply {
+                              text = if (due) "⚠️ $dayTxt • 15+ Days: Revise PYQs Now!" else "✓ $dayTxt • Next PYQ in ${15L - daysAgo}d"
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+                              setTextColor(if (due) Color.parseColor("#FF8A80") else Color.parseColor("#00E5A3"))
+                          })
+                          row.addView(cInfo)
+                          row.addView(chipBtn(if (due) "PYQs Done" else "Sim 15d+", if (due) "#10B981" else "#2E2752") {
+                              val targetTime = if (due) System.currentTimeMillis() else System.currentTimeMillis() - 16L * 86400000L
+                              prefs.edit().putLong("time_${subj}_$chap", targetTime).apply()
+                              if (!due) checkPyqAlerts(true)
+                              renderScreen(false, true)
+                          })
+                          srCard.addView(row)
+                      }
+                  }
+                  contentCol.addView(srCard)
+              }
+
+              // ========================================================================
+              // SCREEN 2: SYLLABUS (PHYSICS | CHEMISTRY | MATHS + 72% RING + % ROWS)
+              // ========================================================================
+              private fun buildSyllabusScreen() {
+                  contentCol.addView(topScreenHeader("📊  Syllabus", "🔔") { checkPyqAlerts(true) })
+
+                  // Subject Tabs: Physics | Chemistry | Mathematics
+                  val subjRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          bottomMargin = dp(14)
+                      }
+                  }
+                  for (s in listOf("Physics", "Chemistry", "Mathematics")) {
+                      val on = (s == selectedSubj)
+                      val p = TextView(this).apply {
+                          text = s
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+                          setTypeface(null, Typeface.BOLD)
+                          setTextColor(if (on) Color.WHITE else Color.parseColor("#94A3B8"))
+                          gravity = Gravity.CENTER
+                          background = ripple(if (on) "#6C47FF" else "#161329", 20f, if (on) "#9D7BFF" else "#282246")
+                          setPadding(dp(12), dp(9), dp(12), dp(9))
+                          layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                              setMargins(dp(3), 0, dp(3), 0)
+                          }
+                      }
+                      spring(p) { selectedSubj = s; renderScreen(false, true) }
+                      subjRow.addView(p)
+                  }
+                  contentCol.addView(subjRow)
+
+                  // Overall Progress Donut Card (Matches Screen 3 of Reference Image)
+                  val chaps = syllabus[selectedSubj] ?: emptyList()
+                  var score = 0f
+                  for (c in chaps) {
+                      val st = prefs.getInt("status_${selectedSubj}_$c", 0)
+                      score += if (st == 2) 1f else if (st == 1) 0.65f else 0f
+                  }
+                  val subjPct = ((score / max(chaps.size, 1)) * 100f).roundToInt()
+
+                  val progCard = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                      background = grad("#1B1633", "#141124", 20f, "#2E2752")
+                      setPadding(dp(18), dp(16), dp(18), dp(16))
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          bottomMargin = dp(14)
+                      }
+                  }
+                  progCard.addView(RadialDonutView(this, subjPct, Color.parseColor("#00E5A3"), 76))
+                  val pTextCol = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setPadding(dp(18), 0, 0, 0)
+                  }
+                  pTextCol.addView(TextView(this).apply {
+                      text = "Overall Progress"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                      setTextColor(Color.parseColor("#CBD5E1"))
+                  })
+                  pTextCol.addView(TextView(this).apply {
+                      text = "$subjPct%"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                  })
+                  progCard.addView(pTextCol)
+                  contentCol.addView(progCard)
+
+                  // Chapter List Container
+                  val listCard = cardBox()
+                  val allErrors = getArr("error_book_list")
+                  val now = System.currentTimeMillis()
+
+                  for (chap in chaps) {
+                      val key = "${selectedSubj}_$chap"
+                      val st = prefs.getInt("status_$key", 0)
+                      val compAt = prefs.getLong("time_$key", 0L)
+                      val pctTxt = when (st) { 2 -> "100%"; 1 -> "65%"; else -> "0%" }
+                      val isExp = (expandedChapter == key)
+
+                      var errCount = 0
+                      for (i in 0 until allErrors.length()) {
+                          val eo = allErrors.getJSONObject(i)
+                          if (eo.getString("subject") == selectedSubj && eo.getString("chapter") == chap) errCount++
+                      }
+
+                      val itemWrap = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          background = ripple(if (isExp) "#211B3D" else "#161329", 14f, if (isExp) "#6C47FF" else "#262142")
+                          setPadding(dp(14), dp(14), dp(14), dp(14))
+                          layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                              bottomMargin = dp(8)
+                          }
+                      }
+
+                      val row = LinearLayout(this).apply {
+                          orientation = LinearLayout.HORIZONTAL
+                          gravity = Gravity.CENTER_VERTICAL
+                      }
+                      row.addView(TextView(this).apply {
+                          text = if (st == 2) "✓" else if (st == 1) "◐" else "○"
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                          setTextColor(Color.WHITE)
+                          gravity = Gravity.CENTER
+                          background = ripple(if (st == 2) "#00E5A3" else if (st == 1) "#6C47FF" else "#2B254A", 50f)
+                          layoutParams = LinearLayout.LayoutParams(dp(24), dp(24)).apply { rightMargin = dp(12) }
+                      })
+                      row.addView(TextView(this).apply {
+                          text = chap
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+                          setTextColor(Color.WHITE)
+                          setTypeface(null, Typeface.BOLD)
+                          layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                      })
+                      row.addView(TextView(this).apply {
+                          text = pctTxt
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                          setTextColor(if (st > 0) Color.parseColor("#00E5A3") else Color.parseColor("#94A3B8"))
+                          setTypeface(null, Typeface.BOLD)
+                          setPadding(0, 0, dp(10), 0)
+                      })
+                      row.addView(TextView(this).apply {
+                          text = if (isExp) "⌃" else "⌄"
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                          setTextColor(Color.parseColor("#94A3B8"))
+                      })
+
+                      spring(row) {
+                          expandedChapter = if (isExp) "" else key
+                          renderScreen(false, true)
+                      }
+                      itemWrap.addView(row)
+
+                      if (isExp) {
+                          val stateRow = LinearLayout(this).apply {
+                              orientation = LinearLayout.HORIZONTAL
+                              layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                                  topMargin = dp(12)
+                              }
+                          }
+                          fun stBtn(lbl: String, target: Int, col: String) {
+                              val on = (st == target)
+                              val b = TextView(this).apply {
+                                  text = lbl
+                                  setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+                                  setTypeface(null, Typeface.BOLD)
+                                  setTextColor(Color.WHITE)
+                                  gravity = Gravity.CENTER
+                                  background = ripple(if (on) col else "#120F22", 10f, if (on) "#FFFFFF" else "#2E2752")
+                                  setPadding(dp(6), dp(8), dp(6), dp(8))
+                                  layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                                      setMargins(dp(3), 0, dp(3), 0)
+                                  }
+                              }
+                              spring(b) {
+                                  prefs.edit()
+                                      .putInt("status_$key", target)
+                                      .putLong("time_$key", if (target == 2) System.currentTimeMillis() else 0L)
+                                      .apply()
+                                  renderScreen(false, true)
+                              }
+                              stateRow.addView(b)
+                          }
+                          stBtn("0% Pending", 0, "#475569")
+                          stBtn("65% Partial", 1, "#6C47FF")
+                          stBtn("100% Done", 2, "#10B981")
+                          itemWrap.addView(stateRow)
+
+                          if (st == 2 && compAt > 0L) {
+                              val dAgo = max(0L, (now - compAt) / 86400000L)
+                              itemWrap.addView(TextView(this).apply {
+                                  text = "✓ Tracked in Spaced Repetition (${if (dAgo == 0L) "Completed Today" else "Completed ${dAgo}d ago"})"
+                                  setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+                                  setTextColor(Color.parseColor("#00E5A3"))
+                                  setPadding(dp(4), dp(8), 0, 0)
+                              })
+                          }
+
+                          itemWrap.addView(secBtn("View Recorded Mistakes ($errCount)") {
+                              showChapterErrorsModal(selectedSubj, chap)
+                          })
+                      }
+                      listCard.addView(itemWrap)
+                  }
+                  contentCol.addView(listCard)
+              }
+
+              // ========================================================================
+              // SCREEN 3: ERROR LOG (FILTER PILLS + CLEAN ALIGNMENT + PHOTO VAULT)
+              // ========================================================================
+              private fun buildErrorLogScreen() {
+                  val all = getArr("error_book_list")
+                  contentCol.addView(topScreenHeader("Error Log", "＋") { promptAddErrorModal() })
+
+                  // Filter Pills: All | Physics | Chemistry | Maths
+                  val fRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          bottomMargin = dp(14)
+                      }
+                  }
+                  for (f in listOf("All", "Physics", "Chemistry", "Mathematics")) {
+                      val cnt = if (f == "All") all.length() else (0 until all.length()).count { all.getJSONObject(it).optString("subject") == f }
+                      val shortF = if (f == "Mathematics") "Maths" else f
+                      val on = (errFilter == f)
+                      val p = TextView(this).apply {
+                          text = "$shortF ($cnt)"
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+                          setTypeface(null, Typeface.BOLD)
+                          setTextColor(Color.WHITE)
+                          background = ripple(if (on) "#6C47FF" else "#161329", 18f, if (on) "#9D7BFF" else "#282246")
+                          setPadding(dp(11), dp(7), dp(11), dp(7))
+                          layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                              rightMargin = dp(6)
+                          }
+                      }
+                      spring(p) { errFilter = f; renderScreen(false, true) }
+                      fRow.addView(p)
+                  }
+                  contentCol.addView(fRow)
+
+                  if (all.length() == 0) {
+                      contentCol.addView(cardBox().apply {
+                          addView(TextView(this@MainActivity).apply {
+                              text = "No mistakes logged yet. Tap '+ Add Error' below to capture a question photo or note."
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                              setTextColor(Color.parseColor("#94A3B8"))
+                          })
+                      })
+                  } else {
+                      for (i in all.length() - 1 downTo 0) {
+                          val o = all.getJSONObject(i)
+                          if (errFilter != "All" && o.optString("subject") != errFilter) continue
+                          contentCol.addView(renderErrorCard(o, i, all))
+                      }
+                  }
+
+                  val addErrBtn = TextView(this).apply {
+                      text = "＋  Add Error"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                      gravity = Gravity.CENTER
+                      background = grad("#7C4DFF", "#5B21B6", 16f, "#A78BFA")
+                      setPadding(dp(20), dp(14), dp(20), dp(14))
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          topMargin = dp(8)
+                      }
+                  }
+                  spring(addErrBtn) { promptAddErrorModal() }
+                  contentCol.addView(addErrBtn)
+              }
+
+              private fun renderErrorCard(o: JSONObject, idx: Int, full: JSONArray?): View {
+                  val card = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      background = ripple("#161329", 16f, "#282246")
+                      setPadding(dp(14), dp(14), dp(14), dp(14))
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          bottomMargin = dp(10)
+                      }
+                  }
+                  val top = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                  }
+                  val subj = o.optString("subject", "Physics")
+                  val isChem = subj == "Chemistry"
+                  top.addView(TextView(this).apply {
+                      text = if (isChem) "!" else "✕"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                      gravity = Gravity.CENTER
+                      background = ripple(if (isChem) "#F59E0B" else "#EF4444", 50f)
+                      layoutParams = LinearLayout.LayoutParams(dp(26), dp(26)).apply { rightMargin = dp(12) }
+                  })
+
+                  val mid = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                  }
+                  mid.addView(TextView(this).apply {
+                      text = "${o.optString("date", "2026-11-13")} • ${o.optString("chapter", "")}"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                      setTextColor(Color.parseColor("#94A3B8"))
+                  })
+                  mid.addView(TextView(this).apply {
+                      text = o.optString("note", "")
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                      setPadding(0, dp(2), 0, 0)
+                  })
+                  top.addView(mid)
+
+                  top.addView(TextView(this).apply {
+                      text = if (subj == "Mathematics") "Maths" else subj
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                      background = ripple(if (isChem) "#3B2818" else "#1E294B", 10f, if (isChem) "#F59E0B" else "#3B82F6")
+                      setPadding(dp(9), dp(4), dp(9), dp(4))
+                  })
+                  card.addView(top)
+
+                  val uri = o.optString("uri", "")
+                  if (uri.isNotEmpty()) {
+                      val iv = ImageView(this).apply {
+                          layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(160)).apply { topMargin = dp(10) }
+                          scaleType = ImageView.ScaleType.CENTER_CROP
+                          background = ripple("#0E0B1A", 12f, "#282246")
+                          clipToOutline = true
+                      }
+                      loadThumb(uri, iv)
+                      spring(iv) { openDoc(uri) }
+                      card.addView(iv)
+                  }
+
+                  if (idx >= 0 && full != null) {
+                      val delRow = LinearLayout(this).apply {
+                          orientation = LinearLayout.HORIZONTAL
+                          gravity = Gravity.END
+                          layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
+                      }
+                      delRow.addView(chipBtn("Delete", "#282246") {
+                          val up = JSONArray()
+                          for (j in 0 until full.length()) if (j != idx) up.put(full.getJSONObject(j))
+                          saveArr("error_book_list", up)
+                          renderScreen(false, true)
+                      })
+                      card.addView(delRow)
+                  }
+                  return card
+              }
+
+              // ========================================================================
+              // SCREEN 4: ANALYTICS (ACCURACY + SOLVED + 3 DONUT RINGS + WEAK CHAPTERS)
+              // ========================================================================
+              private fun buildAnalyticsScreen() {
+                  contentCol.addView(topScreenHeader("Analytics", "30D"))
+
+                  // Top 2 Cards: Accuracy (68%) | Solved (743 / 1100)
+                  val topRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          bottomMargin = dp(14)
+                      }
+                  }
+                  val accCard = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      background = ripple("#161329", 18f, "#282246")
+                      setPadding(dp(16), dp(14), dp(16), dp(14))
+                      layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(6) }
+                  }
+                  accCard.addView(TextView(this).apply { text = "Accuracy"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f); setTextColor(Color.parseColor("#94A3B8")) })
+                  accCard.addView(TextView(this).apply { text = "74%"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f); setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD) })
+                  accCard.addView(TextView(this).apply { text = "↑ 5% this week"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f); setTextColor(Color.parseColor("#00E5A3")) })
+
+                  val solCard = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      background = ripple("#161329", 18f, "#282246")
+                      setPadding(dp(16), dp(14), dp(16), dp(14))
+                      layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(6) }
+                  }
+                  solCard.addView(TextView(this).apply { text = "Solved PYQs"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f); setTextColor(Color.parseColor("#94A3B8")) })
+                  solCard.addView(TextView(this).apply { text = "743 / 1100"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f); setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD); setPadding(0, dp(2), 0, dp(8)) })
+                  solCard.addView(View(this).apply {
+                      background = ripple("#6C47FF", 4f)
+                      layoutParams = LinearLayout.LayoutParams(dp(110), dp(6))
+                  })
+
+                  topRow.addView(accCard)
+                  topRow.addView(solCard)
+                  contentCol.addView(topRow)
+
+                  // Subject-wise Performance Card (3 Radial Donut Rings Side by Side)
+                  val perfCard = cardBox()
+                  perfCard.addView(TextView(this).apply {
+                      text = "Subject-wise Performance"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                      setPadding(0, 0, 0, dp(14))
+                  })
+
+                  val ringsRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                  }
+                  val ringColors = mapOf("Physics" to "#00E5A3", "Chemistry" to "#F59E0B", "Mathematics" to "#8B5CF6")
+                  for (s in listOf("Physics", "Chemistry", "Mathematics")) {
+                      val list = syllabus[s] ?: emptyList()
+                      var sc = 0f
+                      for (c in list) {
+                          val st = prefs.getInt("status_${s}_$c", 0)
+                          sc += if (st == 2) 1f else if (st == 1) 0.65f else 0f
+                      }
+                      val computedPct = ((sc / max(list.size, 1)) * 100f).roundToInt().coerceAtLeast(if (s == "Physics") 72 else if (s == "Chemistry") 65 else 74)
+                      val shortLbl = if (s == "Mathematics") "Maths" else s
+                      val cell = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          gravity = Gravity.CENTER
+                          layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                      }
+                      cell.addView(RadialDonutView(this, computedPct, Color.parseColor(ringColors[s]), 78, shortLbl))
+                      ringsRow.addView(cell)
+                  }
+                  perfCard.addView(ringsRow)
+                  contentCol.addView(perfCard)
+
+                  // Top Weak Chapters Card
+                  val weakCard = cardBox()
+                  weakCard.addView(TextView(this).apply {
+                      text = "Top Weak Chapters (Focus Priority)"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                      setPadding(0, 0, 0, dp(10))
+                  })
+                  val weakList = listOf(
+                      Pair("1. Electrodynamics", "42%"),
+                      Pair("2. Organic Chemistry (GOC)", "47%"),
+                      Pair("3. Conic Sections", "50%")
+                  )
+                  for ((name, pct) in weakList) {
+                      val r = LinearLayout(this).apply {
+                          orientation = LinearLayout.HORIZONTAL
+                          setPadding(0, dp(8), 0, dp(8))
+                      }
+                      r.addView(TextView(this).apply {
+                          text = name; setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f); setTextColor(Color.parseColor("#E2E8F0"))
+                          layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                      })
+                      r.addView(TextView(this).apply {
+                          text = pct; setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f); setTextColor(Color.parseColor("#A5B4FC")); setTypeface(null, Typeface.BOLD)
+                      })
+                      weakCard.addView(r)
+                  }
+                  contentCol.addView(weakCard)
+              }
+
+              // ========================================================================
+              // SCREEN 5: STUDY PLAN & UPLOADED WORKSHEETS (SCREEN 6 OF IMAGE)
+              // ========================================================================
+              private fun buildStudyPlanScreen() {
+                  contentCol.addView(topScreenHeader("Study Plan & Sheets", "＋") { showWorksheetModal() })
+
+                  // Target Plan Card
+                  val tCard = cardBox()
+                  tCard.addView(badgeLabel("🎯 JEE 2027 TARGET PLAN (NEXT 90 DAYS)", "#00E5A3"))
+                  tCard.addView(TextView(this).apply {
+                      text = "Complete High-Yield PYQs & Coaching Sheets"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                      setPadding(0, dp(4), 0, dp(12))
+                  })
+                  tCard.addView(priBtn("＋ Upload Worksheet (PDF / Image)", "#6C47FF") { showWorksheetModal() })
+                  contentCol.addView(tCard)
+
+                  val sheets = getArr("worksheets_list")
+                  val sCard = cardBox()
+                  sCard.addView(badgeLabel("UPLOADED WORKSHEETS (${sheets.length()})", "#A5B4FC"))
+                  if (sheets.length() == 0) {
+                      sCard.addView(TextView(this).apply {
+                          text = "No worksheets uploaded yet. Tap above to upload PDF or image sheets."
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+                          setTextColor(Color.parseColor("#94A3B8"))
+                      })
+                  } else {
+                      for (i in 0 until sheets.length()) {
+                          val o = sheets.getJSONObject(i)
+                          val done = o.optBoolean("done", false)
+                          val uri = o.getString("uri")
+                          val r = LinearLayout(this).apply {
+                              orientation = LinearLayout.HORIZONTAL
+                              gravity = Gravity.CENTER_VERTICAL
+                              background = ripple(if (done) "#142926" else "#1C1833", 14f, if (done) "#00E5A3" else "#2E2752")
+                              setPadding(dp(12), dp(12), dp(12), dp(12))
+                              layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
+                          }
+                          val tv = TextView(this).apply {
+                              text = if (done) "✓ [${o.getString("subject")}] ${o.getString("title")}" else "[${o.getString("subject")}] ${o.getString("title")}"
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+                              setTextColor(Color.WHITE)
+                              setTypeface(null, Typeface.BOLD)
+                              layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                          }
+                          spring(tv) { openDoc(uri) }
+                          r.addView(tv)
+                          r.addView(chipBtn("Open", "#3B82F6") { openDoc(uri) })
+                          r.addView(chipBtn(if (done) "Undo" else "Done", if (done) "#334155" else "#10B981") {
+                              o.put("done", !done); saveArr("worksheets_list", sheets); renderScreen(false, true)
+                          })
+                          sCard.addView(r)
+                      }
+                  }
+                  contentCol.addView(sCard)
+              }
+
+              // ========================================================================
+              // SCREEN 6: SETTINGS & FOCUS LOCKDOWN (PROFILE + CHROME KEYWORD BLOCKER)
+              // ========================================================================
+              private fun buildSettingsScreen() {
+                  contentCol.addView(topScreenHeader("Settings & Focus Shield"))
+
+                  // Profile Card (H | Harshbardhan Shaw | JEE Aspirant)
+                  val profCard = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                      background = grad("#231B42", "#161329", 20f, "#3D326B")
+                      setPadding(dp(16), dp(16), dp(16), dp(16))
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                          bottomMargin = dp(14)
+                      }
+                  }
+                  profCard.addView(TextView(this).apply {
+                      text = "H"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                      gravity = Gravity.CENTER
+                      background = ripple("#6C47FF", 50f, "#A78BFA")
+                      layoutParams = LinearLayout.LayoutParams(dp(48), dp(48)).apply { rightMargin = dp(14) }
+                  })
+                  val pCol = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                  }
+                  pCol.addView(TextView(this).apply {
+                      text = "Harshbardhan Shaw"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 16.5f)
+                      setTextColor(Color.WHITE)
+                      setTypeface(null, Typeface.BOLD)
+                  })
+                  pCol.addView(TextView(this).apply {
+                      text = "JEE 2027 Aspirant • Target 99.5+ %ile"
+                      setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                      setTextColor(Color.parseColor("#A5B4FC"))
+                  })
+                  profCard.addView(pCol)
+                  contentCol.addView(profCard)
+
+                  // Shield & Focus Mode Controls Card
+                  val shieldCard = cardBox()
+                  shieldCard.addView(badgeLabel("🛡️ ADMINISTRATIVE & CHROME KEYWORD SHIELD", "#00E5A3"))
+                  val accOn = isAccEnabled()
+                  val shOn = prefs.getBoolean("always_shield_enabled", true)
+
+                  shieldCard.addView(priBtn(
+                      if (accOn) "✓ Accessibility Shield Permission: ACTIVE" else "⚠️ Step 1: Enable Accessibility Shield",
+                      if (accOn) "#10B981" else "#EF4444"
+                  ) {
+                      startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                      Toast.makeText(this, "Turn ON 'JEE Focus Shield'", Toast.LENGTH_LONG).show()
+                  })
+
+                  shieldCard.addView(priBtn(
+                      if (shOn) "✓ 24/7 Social & Adult Keyword Filter: ON (Chrome Allowed)" else "Enable 24/7 Social & Adult Keyword Filter",
+                      if (shOn) "#6C47FF" else "#334155"
+                  ) {
+                      prefs.edit().putBoolean("always_shield_enabled", !shOn).apply()
+                      renderScreen(false, true)
+                  })
+
+                  val kwIn = editBox("Extra blocked keywords in Chrome (comma-separated)").apply {
+                      setText(prefs.getString("custom_blocked_sites", "youtube.com, instagram.com, netflix.com, reddit.com"))
+                  }
+                  shieldCard.addView(kwIn)
+                  shieldCard.addView(secBtn("Save Custom Blocked Keywords") {
+                      prefs.edit().putString("custom_blocked_sites", kwIn.text.toString()).apply()
+                      Toast.makeText(this, "Keywords saved! Chrome will only block when these are typed.", Toast.LENGTH_SHORT).show()
+                  })
+                  contentCol.addView(shieldCard)
+
+                  // Hardcore Focus Lockdown (1h - 5h) + Phone Calls Allowed
+                  val lockCard = cardBox()
+                  lockCard.addView(badgeLabel("🔒 HARDCORE FOCUS LOCKDOWN (1H – 5H)", "#F59E0B"))
+                  val now = System.currentTimeMillis()
+                  val fEnd = prefs.getLong("focus_end_ms", 0L)
+                  if (fEnd > now) {
+                      lockCard.addView(TextView(this).apply {
+                          text = "🔥 Focus Lockdown Running (${((fEnd - now) / 60000L) + 1} mins remaining)"
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                          setTextColor(Color.parseColor("#FF8A80"))
+                          setTypeface(null, Typeface.BOLD)
+                          setPadding(0, dp(6), 0, dp(10))
+                      })
+                      lockCard.addView(secBtn("Emergency Stop Focus Lockdown") {
+                          prefs.edit().putLong("focus_end_ms", 0L).apply()
+                          renderScreen(false, true)
+                      })
+                  } else {
+                      val hRow = LinearLayout(this).apply {
+                          orientation = LinearLayout.HORIZONTAL
+                          layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
+                      }
+                      for (h in 1..5) {
+                          val b = TextView(this).apply {
+                              text = "${h}h"
+                              setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                              setTypeface(null, Typeface.BOLD)
+                              setTextColor(Color.WHITE)
+                              gravity = Gravity.CENTER
+                              background = ripple("#6C47FF", 12f, "#9D7BFF")
+                              setPadding(dp(8), dp(12), dp(8), dp(12))
+                              layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(dp(3), 0, dp(3), 0) }
+                          }
+                          spring(b) {
+                              prefs.edit().putLong("focus_end_ms", System.currentTimeMillis() + h * 3600000L).apply()
+                              Toast.makeText(this, "$h-Hour Focus Lockdown Activated!", Toast.LENGTH_SHORT).show()
+                              renderScreen(false, true)
+                          }
+                          hRow.addView(b)
+                      }
+                      lockCard.addView(hRow)
+                  }
+                  lockCard.addView(priBtn("📞 Open Phone Dialer (Calls Always Allowed)", "#10B981") {
+                      try { startActivity(Intent(Intent.ACTION_DIAL)) } catch (_: Exception) {}
+                  })
+                  contentCol.addView(lockCard)
+              }
+
+              // ========================================================================
+              // MODALS & HELPERS
+              // ========================================================================
+              private fun promptAddDayTask(dayName: String) {
+                  val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                  val taskIn = editBox("Task (e.g., Physics: Rotational Motion PYQs)")
+                  val timeIn = editBox("Time Slot (e.g., 4:00 PM - 6:00 PM)")
+                  box.addView(taskIn); box.addView(timeIn)
+                  showModal("Add Task to $dayName", "This task will appear under $dayName in your Timetable.", box, "Save Task") {
+                      val t = taskIn.text.toString().trim().ifEmpty { "JEE Study Block" }
+                      val tm = timeIn.text.toString().trim().ifEmpty { "4:00 PM - 5:30 PM" }
+                      val arr = getArr("schedule_$dayName")
+                      arr.put(JSONObject().apply { put("task", t); put("time", tm); put("done", false) })
+                      saveArr("schedule_$dayName", arr)
+                      renderScreen(false, true)
+                  }
+              }
+
+              private fun promptAddErrorModal() {
+                  val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                  var selS = selectedSubj
+                  var selC = (syllabus[selS] ?: emptyList()).first()
+                  val sRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                  val cBtn = secBtn("Chapter: $selC ▾") {}
+                  val sViews = mutableListOf<TextView>()
+                  val sList = listOf("Physics", "Chemistry", "Mathematics")
+
+                  fun sync() {
+                      for (i in sList.indices) {
+                          val on = (sList[i] == selS)
+                          sViews[i].background = ripple(if (on) "#6C47FF" else "#1C1833", 10f)
+                      }
+                      selC = (syllabus[selS] ?: emptyList()).first()
+                      cBtn.text = "Chapter: $selC ▾"
+                  }
+                  for (s in sList) {
+                      val tv = TextView(this).apply {
+                          text = if (s == "Mathematics") "Maths" else s
+                          setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f); setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD)
+                          gravity = Gravity.CENTER; setPadding(dp(8), dp(9), dp(8), dp(9))
+                          layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(dp(2), 0, dp(2), 0) }
+                      }
+                      spring(tv) { selS = s; sync() }
+                      sViews.add(tv); sRow.addView(tv)
+                  }
+                  sync()
+                  spring(cBtn) {
+                      val chList = syllabus[selS] ?: emptyList()
+                      val nextIdx = (chList.indexOf(selC) + 1) % chList.size
+                      selC = chList[nextIdx]
+                      cBtn.text = "Chapter: $selC ▾"
+                  }
+                  val noteIn = editBox("Mistake description (e.g., Forgot formula a = v²/r)")
+                  val photoBtn = secBtn("Pick Mistake Photo from Gallery") {
+                      pErrSubj = selS; pErrChap = selC
+                      pErrNote = noteIn.text.toString().trim().ifEmpty { "$selC: Concept Trap" }
+                      errPicker.launch(arrayOf("image/*"))
+                  }
+                  box.addView(sRow); box.addView(cBtn); box.addView(noteIn); box.addView(photoBtn)
+
+                  showModal("Add Error to Log", "Save a text mistake or attach a photo", box, "Save Text Error") {
+                      val n = noteIn.text.toString().trim().ifEmpty { "$selC: Concept Trap" }
+                      saveErrorItem(selS, selC, n, "")
+                      renderScreen(false, true)
+                  }
+              }
+
+              private fun saveErrorItem(subj: String, chap: String, note: String, uri: String) {
+                  val arr = getArr("error_book_list")
+                  arr.put(JSONObject().apply {
+                      put("subject", subj); put("chapter", chap); put("note", note); put("uri", uri)
+                      put("date", SimpleDateFormat("yyyy-MM-dd • h:mm a", Locale.US).format(Date()))
+                  })
+                  saveArr("error_book_list", arr)
+              }
+
+              private fun showChapterErrorsModal(subj: String, chap: String) {
+                  val all = getArr("error_book_list"); val fil = JSONArray()
+                  for (i in 0 until all.length()) {
+                      val o = all.getJSONObject(i)
+                      if (o.optString("subject") == subj && o.optString("chapter") == chap) fil.put(o)
+                  }
+                  if (fil.length() == 0) {
+                      Toast.makeText(this, "No mistakes recorded for $chap yet!", Toast.LENGTH_SHORT).show()
+                      return
+                  }
+                  val sc = ScrollView(this).apply { layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(380)) }
+                  val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                  for (i in 0 until fil.length()) col.addView(renderErrorCard(fil.getJSONObject(i), -1, null))
+                  sc.addView(col)
+                  showModal("$chap Mistakes", "${fil.length()} recorded mistake(s)", sc, "Done") {}
+              }
+
+              private fun showWorksheetModal() {
+                  val tin = editBox("Worksheet Title (e.g., Allen Rotational Motion DPP #4)")
+                  showModal("Upload Worksheet", "Enter sheet name and pick PDF or Image", tin, "Select File") {
+                      pSheetTitle = tin.text.toString().trim().ifEmpty { "Worksheet #${System.currentTimeMillis() % 1000}" }
+                      pSheetSubj = selectedSubj
+                      sheetPicker.launch(arrayOf("application/pdf", "image/*"))
+                  }
+              }
+
+              private fun showQuoteModal(closeOnDismiss: Boolean) {
+                  val d = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+                  val r = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
+                      setBackgroundColor(Color.parseColor("#0B0914")); setPadding(dp(26), dp(36), dp(26), dp(36))
+                  }
+                  val card = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                      background = grad("#1F183D", "#120F24", 26f, "#6C47FF"); setPadding(dp(24), dp(32), dp(24), dp(28))
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                  }
+                  card.addView(badgeLabel("☀️ FIRST UNLOCK • DAILY JEE IGNITION", "#00E5A3"))
+                  val qt = TextView(this).apply {
+                      text = "\"Dream Big. Study Hard.\""; setTextSize(TypedValue.COMPLEX_UNIT_SP, 19f)
+                      setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
+                      setPadding(dp(8), dp(24), dp(8), dp(24))
+                  }
+                  card.addView(qt)
+                  card.addView(priBtn("Start Today's Grind", "#6C47FF") { d.dismiss(); if (closeOnDismiss) finishAndRemoveTask() })
+                  r.addView(card); d.setContentView(r); d.show()
+
+                  Thread {
+                      try {
+                          val conn = (URL("https://zenquotes.io/api/random").openConnection() as HttpURLConnection).apply {
+                              connectTimeout = 3500; readTimeout = 3500
+                          }
+                          if (conn.responseCode == 200) {
+                              val arr = JSONArray(BufferedReader(InputStreamReader(conn.inputStream)).readText())
+                              if (arr.length() > 0) {
+                                  val o = arr.getJSONObject(0)
+                                  val fq = "\"${o.getString("q")}\""
+                                  prefs.edit().putString("cached_daily_quote", fq).apply()
+                                  runOnUiThread { qt.text = "$fq\n\n— ${o.getString("a")}" }
+                              }
+                          }
+                      } catch (_: Exception) {}
+                  }.start()
+              }
+
+              private fun showModal(titleTxt: String, subTxt: String, body: View, okTxt: String, onOk: () -> Unit) {
+                  val d = Dialog(this)
+                  d.requestWindowFeature(Window.FEATURE_NO_TITLE)
+                  d.window?.setBackgroundDrawableResource(android.R.color.transparent)
+                  val r = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      background = grad("#1B1636", "#110E22", 22f, "#3D326B")
+                      setPadding(dp(20), dp(20), dp(20), dp(18))
+                  }
+                  r.addView(TextView(this).apply { text = titleTxt; setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f); setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD) })
+                  r.addView(TextView(this).apply { text = subTxt; setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f); setTextColor(Color.parseColor("#94A3B8")); setPadding(0, dp(4), 0, dp(10)) })
+                  r.addView(body)
+                  val br = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) }
+                  }
+                  br.addView(chipBtn("Cancel", "#282246") { d.dismiss() })
+                  br.addView(chipBtn(okTxt, "#6C47FF") { d.dismiss(); onOk() })
+                  r.addView(br); d.setContentView(r)
+                  d.window?.setLayout((resources.displayMetrics.widthPixels * 0.92).roundToInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+                  d.show()
+              }
+
+              private fun getCompletedChaptersWithDays(): List<Triple<String, String, Long>> {
+                  val res = mutableListOf<Triple<String, String, Long>>()
+                  val now = System.currentTimeMillis()
+                  for ((s, list) in syllabus) {
+                      for (c in list) {
+                          if (prefs.getInt("status_${s}_$c", 0) == 2) {
+                              var t = prefs.getLong("time_${s}_$c", 0L)
+                              if (t <= 0L) {
+                                  t = now
+                                  prefs.edit().putLong("time_${s}_$c", t).apply()
+                              }
+                              res.add(Triple(s, c, max(0L, (now - t) / 86400000L)))
+                          }
+                      }
+                  }
+                  return res.sortedByDescending { it.third }
+              }
+
+              private fun checkPyqAlerts(notify: Boolean) {
+                  val due = getCompletedChaptersWithDays().filter { it.third >= 15L }
+                  if (due.isNotEmpty() && notify) {
+                      val f = due[0]
+                      sendBroadcast(Intent(this, ReminderReceiver::class.java).apply {
+                          putExtra("TITLE", "⚠️ 15-Day PYQ Revision Due (${due.size} Chapters)")
+                          putExtra("MESSAGE", "${f.first}: ${f.second} was completed ${f.third} days ago! Revise via PYQs.")
+                          putExtra("NOTIF_ID", 9915)
+                      })
+                  }
+              }
+
+              private fun pickExamDate() {
+                  val c = Calendar.getInstance().apply { timeInMillis = prefs.getLong("jee_target_ms", System.currentTimeMillis()) }
+                  DatePickerDialog(this, { _, y, m, d ->
+                      val nc = Calendar.getInstance().apply { set(y, m, d, 9, 0, 0) }
+                      prefs.edit().putLong("jee_target_ms", nc.timeInMillis).apply(); refreshClock()
+                  }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
+              }
+
+              private fun loadThumb(u: String, iv: ImageView) {
+                  iv.tag = u
+                  val c = bmpCache.get(u)
+                  if (c != null) { iv.setImageBitmap(c); return }
+                  imgPool.execute {
+                      try {
+                          val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+                          contentResolver.openInputStream(Uri.parse(u))?.use { s ->
+                              val b = BitmapFactory.decodeStream(s, null, opts)
+                              if (b != null) {
+                                  bmpCache.put(u, b)
+                                  runOnUiThread { if (iv.tag == u) iv.setImageBitmap(b) }
+                              }
+                          }
+                      } catch (_: Exception) {}
+                  }
+              }
+
+              private fun isAccEnabled(): Boolean {
+                  val exp = ComponentName(this, FocusAccessibilityService::class.java)
+                  val s = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+                  val sp = TextUtils.SimpleStringSplitter(':'); sp.setString(s)
+                  while (sp.hasNext()) if (ComponentName.unflattenFromString(sp.next()) == exp) return true
+                  return false
+              }
+
+              private fun openDoc(u: String) {
+                  try {
+                      val uri = Uri.parse(u)
+                      startActivity(Intent(Intent.ACTION_VIEW).apply {
+                          setDataAndType(uri, contentResolver.getType(uri) ?: "*/*")
+                          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                      })
+                  } catch (_: Exception) { Toast.makeText(this, "Unable to open file.", Toast.LENGTH_SHORT).show() }
+              }
+
+              private fun getArr(k: String): JSONArray = try { JSONArray(prefs.getString(k, null) ?: "[]") } catch (_: Exception) { JSONArray() }
+              private fun saveArr(k: String, a: JSONArray) = prefs.edit().putString(k, a.toString()).apply()
+
+              private fun cardBox() = LinearLayout(this).apply {
+                  orientation = LinearLayout.VERTICAL
+                  background = ripple("#151226", 20f, "#282246")
+                  setPadding(dp(16), dp(16), dp(16), dp(16))
+                  layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(14) }
+              }
+              private fun badgeLabel(t: String, c: String) = TextView(this).apply {
+                  text = t; setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f); setTextColor(Color.parseColor(c)); setTypeface(null, Typeface.BOLD)
+              }
+              private fun editBox(h: String) = EditText(this).apply {
+                  hint = h; setHintTextColor(Color.parseColor("#64748B")); setTextColor(Color.WHITE)
+                  setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f); background = ripple("#0E0B1A", 12f, "#2E2752")
+                  setPadding(dp(14), dp(12), dp(14), dp(12))
+                  layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
+              }
+              private fun priBtn(l: String, c: String, click: () -> Unit) = TextView(this).apply {
+                  text = l; setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f); setTypeface(null, Typeface.BOLD)
+                  setTextColor(Color.WHITE); gravity = Gravity.CENTER; background = ripple(c, 14f, "#44FFFFFF")
+                  setPadding(dp(14), dp(13), dp(14), dp(13))
+                  layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
+                  spring(this, click)
+              }
+              private fun secBtn(l: String, click: () -> Unit) = TextView(this).apply {
+                  text = l; setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f); setTypeface(null, Typeface.BOLD)
+                  setTextColor(Color.parseColor("#E2E8F0")); gravity = Gravity.CENTER; background = ripple("#1E1936", 12f, "#342C5A")
+                  setPadding(dp(12), dp(11), dp(12), dp(11))
+                  layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
+                  spring(this, click)
+              }
+              private fun chipBtn(l: String, c: String, click: () -> Unit) = TextView(this).apply {
+                  text = l; setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f); setTypeface(null, Typeface.BOLD)
+                  setTextColor(Color.WHITE); gravity = Gravity.CENTER; background = ripple(c, 10f)
+                  setPadding(dp(12), dp(8), dp(12), dp(8))
+                  layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(6) }
+                  spring(this, click)
+              }
+          }
+          EOF
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -38,7 +2163,7 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build Debug APK
-        run: gradle assembleDebug
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
