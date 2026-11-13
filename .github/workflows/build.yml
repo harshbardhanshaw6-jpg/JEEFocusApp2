@@ -30,29 +30,16 @@ jobs:
           mkdir -p app/src/main/res/xml
 
           # Download real stargazing night sky hero image (with fallback generator if URL is unreachable)
-          curl -sL "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=1000&q=85" -o app/src/main/res/drawable-nodpi/hero_stargazer.jpg || true
-          python3 - << 'PYEOF'
-          import os, struct, zlib
-          path = "app/src/main/res/drawable-nodpi/hero_stargazer.jpg"
-          if not os.path.exists(path) or os.path.getsize(path) < 5000:
-              # Fallback: create a valid high-res twilight starfield PNG if download failed
-              os.remove(path) if os.path.exists(path) else None
-              png_path = "app/src/main/res/drawable-nodpi/hero_stargazer.png"
-              w, h = 600, 360
-              raw = bytearray()
-              for y in range(h):
-                  raw.append(0)
-                  for x in range(w):
-                      r = int(12 + (y / h) * 28)
-                      g = int(10 + (y / h) * 18)
-                      b = int(28 + (y / h) * 52)
-                      raw.extend((r, g, b))
-              def chunk(tag, data):
-                  return struct.pack("!I", len(data)) + tag + data + struct.pack("!I", zlib.crc32(tag + data) & 0xffffffff)
-              ihdr = struct.pack("!IIBBBBB", w, h, 8, 2, 0, 0, 0)
-              with open(png_path, "wb") as f:
-                  f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(bytes(raw), 6)) + chunk(b"IEND", b""))
-          PYEOF
+          - name: Generate JEE Ascend Clean User-Driven App
+           run: |
+          rm -rf app build.gradle settings.gradle gradle.properties
+          mkdir -p app/src/main/java/com/example/myandroidapp
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/drawable-nodpi
+          mkdir -p app/src/main/res/xml
+
+          # Copy your uploaded image as the default hero background
+          cp Gemini_Generated_Image*.jpg app/src/main/res/drawable-nodpi/hero_stargazer.jpg 2>/dev/null || cp *.jpg app/src/main/res/drawable-nodpi/hero_stargazer.jpg 2>/dev/null || cp *.jpeg app/src/main/res/drawable-nodpi/hero_stargazer.jpg
 
           cat << 'EOF' > gradle.properties
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
@@ -1094,19 +1081,29 @@ jobs:
               }
 
               private fun promptUpdateStreakModal() {
-                  val current = prefs.getInt("study_streak_days", 0)
+                  var current = prefs.getInt("study_streak_days", 0)
                   val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
                   val input = editBox("Set custom streak days (Current: $current)").apply {
                       inputType = InputType.TYPE_CLASS_NUMBER
                       setText(current.toString())
                   }
                   val plusOneBtn = priBtn("🔥 +1 Complete Today's Streak (${current + 1} Days)", "#10B981") {
-                      prefs.edit().putInt("study_streak_days", current + 1).apply()
+                      current += 1
+                      input.setText(current.toString())
+                      prefs.edit().putInt("study_streak_days", current).apply()
+                      Toast.makeText(this, "Streak updated to $current Days!", Toast.LENGTH_SHORT).show()
                       renderScreen(false, true)
+                      box.rootView?.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK))
+                      box.rootView?.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK))
                   }
                   val resetBtn = secBtn("Reset Streak to 0 Days") {
+                      current = 0
+                      input.setText("0")
                       prefs.edit().putInt("study_streak_days", 0).apply()
+                      Toast.makeText(this, "Streak reset to 0 Days", Toast.LENGTH_SHORT).show()
                       renderScreen(false, true)
+                      box.rootView?.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK))
+                      box.rootView?.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK))
                   }
                   box.addView(plusOneBtn)
                   box.addView(input)
