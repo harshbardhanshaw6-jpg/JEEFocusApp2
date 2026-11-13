@@ -29,11 +29,9 @@ jobs:
           mkdir -p app/src/main/res/drawable-nodpi
           mkdir -p app/src/main/res/xml
 
-          # Download real stargazing night sky hero image (with fallback generator if URL is unreachable)
-          - name: Generate JEE Ascend Clean User-Driven App
-           run: |
-          rm -rf app build.gradle settings.gradle gradle.properties
-          mkdir -p app/src/main/java/com/example/myandroidapp
+          cp Gemini_Generated_Image*.jpg app/src/main/res/drawable-nodpi/hero_stargazer.jpg 2>/dev/null || cp *.jpg app/src/main/res/drawable-nodpi/hero_stargazer.jpg 2>/dev/null || cp *.jpeg app/src/main/res/drawable-nodpi/hero_stargazer.jpg || true
+
+          cat << 'EOF' > gradle.properties
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/drawable-nodpi
           mkdir -p app/src/main/res/xml
